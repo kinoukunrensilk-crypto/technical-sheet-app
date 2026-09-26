@@ -1,3 +1,5 @@
+PRAGMA foreign_keys = ON;
+
 -- ========================================================
 -- テクニカルシート評価システム Cloudflare D1 データベーススキーマ
 -- ※介護スタッフ専用（リーダー評価なし）
@@ -41,18 +43,18 @@ CREATE INDEX IF NOT EXISTS idx_eval_staff ON evaluations(staff_id);
 
 -- 初期アドバイザーデータ
 INSERT OR IGNORE INTO advisors (floor, advisor_name, updated_at) VALUES
-('2F', '2F担当アドバイザー', datetime('now', 'localtime')),
-('3F', '3F担当アドバイザー', datetime('now', 'localtime')),
-('4F', '4F担当アドバイザー', datetime('now', 'localtime')),
-('5F', '5F担当アドバイザー', datetime('now', 'localtime'));
+('2F', '2F担当アドバイザー', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('3F', '3F担当アドバイザー', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('4F', '4F担当アドバイザー', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('5F', '5F担当アドバイザー', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
 
 -- 初期スタッフサンプルデータ（各フロア一般介護スタッフ2名ずつ）
 INSERT OR IGNORE INTO staff (id, floor, name, role, order_num, created_at, updated_at) VALUES
-('staff_2f_01', '2F', '介護スタッフ A (2F)', 'general', 1, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_2f_02', '2F', '介護スタッフ B (2F)', 'general', 2, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_3f_01', '3F', '介護スタッフ C (3F)', 'general', 1, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_3f_02', '3F', '介護スタッフ D (3F)', 'general', 2, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_4f_01', '4F', '介護スタッフ E (4F)', 'general', 1, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_4f_02', '4F', '介護スタッフ F (4F)', 'general', 2, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_5f_01', '5F', '介護スタッフ G (5F)', 'general', 1, datetime('now', 'localtime'), datetime('now', 'localtime')),
-('staff_5f_02', '5F', '介護スタッフ H (5F)', 'general', 2, datetime('now', 'localtime'), datetime('now', 'localtime'));
+('staff_2f_01', '2F', '介護スタッフ A (2F)', 'general', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_2f_02', '2F', '介護スタッフ B (2F)', 'general', 2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_3f_01', '3F', '介護スタッフ C (3F)', 'general', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_3f_02', '3F', '介護スタッフ D (3F)', 'general', 2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_4f_01', '4F', '介護スタッフ E (4F)', 'general', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_4f_02', '4F', '介護スタッフ F (4F)', 'general', 2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_5f_01', '5F', '介護スタッフ G (5F)', 'general', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+('staff_5f_02', '5F', '介護スタッフ H (5F)', 'general', 2, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));

@@ -26,7 +26,7 @@ document.addEventListener("DOMContentLoaded", () => {
   const advisorForm = document.getElementById("advisor-form");
 
   // ----------------------------------------------------
-  // 1. 同期ステータスバッジの更新
+  // 1. 同期ステータスバッジの更新 (M3 / F9 / F10対応)
   // ----------------------------------------------------
   function updateSyncStatus(status) {
     if (!syncStatusEl) return;
@@ -34,12 +34,30 @@ document.addEventListener("DOMContentLoaded", () => {
     const textEl = syncStatusEl.querySelector(".sync-text");
     if (status === "synced") {
       textEl.textContent = "クラウド同期済";
+      syncStatusEl.title = "🟢 クラウドと正常に同期されています（クリックで手動再同期）";
     } else if (status === "syncing") {
       textEl.textContent = "同期中...";
+      syncStatusEl.title = "🟡 クラウドへ最新データを同期しています...";
+    } else if (status === "error") {
+      textEl.textContent = "同期エラー (再試行中)";
+      syncStatusEl.title = "⚠️ 通信エラーが発生しました。クリックで今すぐ再同期します";
     } else {
       textEl.textContent = "ローカル保存中";
+      syncStatusEl.title = "💾 端末内に安全に保存されています（クリックで接続再試行）";
     }
   }
+
+  // バッジクリックによる手動再同期リトライ (F10)
+  syncStatusEl?.addEventListener("click", async () => {
+    updateSyncStatus("syncing");
+    const ok = await store.retrySyncManual();
+    if (ok) {
+      updateSyncStatus("synced");
+      renderFloorTabs();
+      renderStaffList();
+      renderEvaluationSheet();
+    }
+  });
 
   // ----------------------------------------------------
   // 2. フロアタブの描画

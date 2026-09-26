@@ -1,14 +1,18 @@
 /**
- * テクニカルシート評価システム: データストア & リアルタイム同期エンジン
- * - LocalStorage即時永続化（オフライン二重防壁）
- * - Cloudflare D1 クラウドAPI即時同期
- * - 定期ポーリングによる他端末更新のリアルタイム反映
- * ※評価対象は一般介護スタッフ専用（リーダー評価なし）
+ * テクニカルシート評価システム: データストア & リアルタイム同期エンジン (V2 堅牢化版)
+ * - LocalStorage即時永続化（二重防壁・オフライン完全対応）
+ * - 永続化同期キュー (TECHNICAL_SHEET_QUEUE_V2) によるリロード・タブ閉じ耐性
+ * - 全ミューテーション（評価、スタッフ追加/削除、アドバイザー）のキューイング
+ * - 指数バックオフ (2s, 4s, 8s, max 30s) & ネットワーク復帰時 (online) 即時自動フラッシュ
+ * - ゾンビ評価パージ & 時計ズレ (Clock Skew) 補正
+ * - 4状態ステータス管理 (🟢 synced, 🟡 syncing, 💾 local_safe, ⚠️ error) & 手動リトライ
  */
 
 class DataStore {
   constructor() {
-    this.STORAGE_KEY = "TECHNICAL_SHEET_DATA_V2"; // V2に更新して介護スタッフ専用データをクリーンに初期化
+    this.STORAGE_KEY_DATA = "TECHNICAL_SHEET_DATA_V2";
+    this.STORAGE_KEY_QUEUE = "TECHNICAL_SHEET_QUEUE_V2";
+
     this.data = {
       staff: [],
       advisors: {
@@ -17,50 +21,81 @@ class DataStore {
         "4F": "4F担当アドバイザー",
         "5F": "5F担当アドバイザー",
       },
-      evaluations: {}, // key: `${staff_id}_${item_id}` => { staff_id, item_id, check_eval, score, checks_json, memo, evaluator_name, evaluation_date, updated_at }
+      evaluations: {},
       lastSyncedAt: null,
     };
 
     this.syncQueue = [];
     this.isSyncing = false;
-    this.syncStatus = "synced"; // 'synced' | 'syncing' | 'offline'
-    this.listeners = [];
-    this.pollInterval = null;
+    this.syncStatus = "synced"; // 'synced' | 'syncing' | 'local_safe' | 'error'
+    this.syncStatusDetails = {};
+    this.statusListeners = [];
+    this.storeListeners = [];
 
-    // 初期化: LocalStorageから読み込み
-    this.loadFromLocal();
+    this.backoffFailures = 0;
+    this.backoffDelayMs = 2000;
+    this.backoffTimer = null;
+    this.serverClockOffsetMs = 0;
+    this.pollInterval = null;
+    this._syncPromise = null;
+
+    // 初期化: ストレージからロード & ネットワーク監視
+    this.loadFromStorage();
+    this.setupNetworkListeners();
   }
 
-  // リスナー登録（UI更新通知用）
+  // 現在時刻（サーバー時刻ズレ補正済みISO文字列）
+  now() {
+    return new Date(Date.now() + this.serverClockOffsetMs).toISOString();
+  }
+
+  // リスナー登録（従来のUIイベント用）
   subscribe(listener) {
-    this.listeners.push(listener);
+    this.storeListeners.push(listener);
     return () => {
-      this.listeners = this.listeners.filter((l) => l !== listener);
+      this.storeListeners = this.storeListeners.filter((l) => l !== listener);
     };
   }
 
   notify(event, payload) {
-    this.listeners.forEach((l) => l(event, payload));
+    this.storeListeners.forEach((l) => {
+      try {
+        l(event, payload);
+      } catch (e) {
+        console.error("Store listener error:", e);
+      }
+    });
   }
 
-  setSyncStatus(status) {
-    if (this.syncStatus !== status) {
-      this.syncStatus = status;
-      this.notify("sync_status_changed", status);
+  // 同期ステータスリスナー（M3 / F9対応）
+  onSyncStatusChange(callback) {
+    this.statusListeners.push(callback);
+    return () => {
+      this.statusListeners = this.statusListeners.filter((l) => l !== callback);
+    };
+  }
+
+  setSyncStatus(status, details = {}) {
+    this.syncStatus = status;
+    this.syncStatusDetails = details;
+    this.notify("sync_status_changed", status);
+    for (const listener of this.statusListeners) {
+      try {
+        listener(status, details);
+      } catch (_) {}
     }
   }
 
-  // LocalStorageからロード
-  loadFromLocal() {
+  // LocalStorageからデータとキューを安全にロード
+  loadFromStorage() {
     try {
-      const raw = localStorage.getItem(this.STORAGE_KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
+      const rawData = localStorage.getItem(this.STORAGE_KEY_DATA);
+      if (rawData) {
+        const parsed = JSON.parse(rawData);
         if (parsed.staff && parsed.staff.length > 0) {
-          // リーダー表記があれば介護スタッフにノーマライズ
           this.data.staff = parsed.staff.map((s) => ({
             ...s,
-            name: s.name.replace(/リーダー/g, "介護スタッフ"),
+            name: (s.name || "").replace(/リーダー/g, "介護スタッフ"),
             role: "general",
           }));
         } else {
@@ -70,13 +105,36 @@ class DataStore {
         if (parsed.evaluations) this.data.evaluations = parsed.evaluations;
         if (parsed.lastSyncedAt) this.data.lastSyncedAt = parsed.lastSyncedAt;
       } else {
-        // 初回初期サンプルデータ
         this.initDefaultData();
       }
+
+      // 永続化された同期キューの復元
+      const rawQueue = localStorage.getItem(this.STORAGE_KEY_QUEUE);
+      if (rawQueue) {
+        const parsedQueue = JSON.parse(rawQueue);
+        if (Array.isArray(parsedQueue)) {
+          this.syncQueue = parsedQueue;
+        }
+      }
     } catch (e) {
-      console.warn("Failed to load from local storage:", e);
+      console.warn("Storage recovery: initializing defaults", e);
+      this.syncQueue = [];
       this.initDefaultData();
     }
+  }
+
+  // LocalStorageへデータとキューを即時永続化
+  saveToStorage() {
+    try {
+      localStorage.setItem(this.STORAGE_KEY_DATA, JSON.stringify(this.data));
+      localStorage.setItem(this.STORAGE_KEY_QUEUE, JSON.stringify(this.syncQueue));
+    } catch (e) {
+      console.error("LocalStorage save error:", e);
+    }
+  }
+
+  saveToLocal() {
+    this.saveToStorage();
   }
 
   // 初回デフォルトサンプルデータ（一般介護スタッフのみ）
@@ -91,70 +149,107 @@ class DataStore {
       { id: "staff_5f_01", floor: "5F", name: "介護スタッフ G (5F)", role: "general", order_num: 1 },
       { id: "staff_5f_02", floor: "5F", name: "介護スタッフ H (5F)", role: "general", order_num: 2 },
     ];
-    this.saveToLocal();
+    this.saveToStorage();
   }
 
-  // LocalStorageへ即時書き込み
-  saveToLocal() {
-    try {
-      localStorage.setItem(this.STORAGE_KEY, JSON.stringify(this.data));
-    } catch (e) {
-      console.error("LocalStorage save error:", e);
-    }
+  // ネットワーク状態イベントハンドラー（F6対応）
+  setupNetworkListeners() {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("online", async () => {
+      this.backoffFailures = 0;
+      this.backoffDelayMs = 2000;
+      if (this.backoffTimer) clearTimeout(this.backoffTimer);
+      await this.flushSyncQueue();
+      await this.fetchBootstrap(true);
+    });
+
+    window.addEventListener("offline", () => {
+      if (this.backoffTimer) clearTimeout(this.backoffTimer);
+      this.setSyncStatus("local_safe");
+    });
   }
 
-  // 起動時のクラウド同期 & 定期ポーリング開始
+  // 起動時の同期開始
   async startRealtimeSync() {
-    // file:// プロトコル（ローカル直接起動）の場合はクラウドAPIが存在しないためローカル保存モードで安定稼働
-    if (window.location.protocol === "file:") {
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
       this.setSyncStatus("local_safe");
       return;
     }
 
     await this.fetchBootstrap();
+    if (this.syncQueue.length > 0) {
+      await this.flushSyncQueue();
+    }
 
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
-        this.fetchBootstrap(true);
-      }, 8000); // 穏やかなポーリング間隔
+        if (navigator.onLine && !this.isSyncing) {
+          this.fetchBootstrap(true);
+        }
+      }, 8000);
     }
   }
 
-  // クラウドから全データ取得 & ローカルとのマージ
+  // クラウドから最新データ取得 & ローカルとの安全マージ（F8対応）
   async fetchBootstrap(isBackground = false) {
-    if (window.location.protocol === "file:") {
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
       this.setSyncStatus("local_safe");
-      return;
+      return false;
+    }
+
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+      return false;
     }
 
     try {
+      if (!isBackground) this.setSyncStatus("syncing");
+
       const res = await fetch("/api/bootstrap", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const result = await res.json();
-      if (!result.success) throw new Error(result.error || "Sync failed");
+      const body = await res.json();
+      if (!body.success) throw new Error(body.error || "Bootstrap failed");
 
-      if (result.staff && result.staff.length > 0) {
-        this.data.staff = result.staff.map((s) => ({
-          ...s,
-          name: s.name.replace(/リーダー/g, "介護スタッフ"),
-          role: "general",
-        }));
+      // 時計ズレ (Clock Skew) の補正計算
+      if (body.serverTime) {
+        const serverTimeMs = new Date(body.serverTime).getTime();
+        this.serverClockOffsetMs = serverTimeMs - Date.now();
       }
 
-      if (result.advisors) {
-        result.advisors.forEach((adv) => {
+      // スタッフの更新 & 削除済みスタッフのゾンビ評価パージ
+      if (Array.isArray(body.staff)) {
+        this.data.staff = body.staff.map((s) => ({
+          ...s,
+          name: (s.name || "").replace(/リーダー/g, "介護スタッフ"),
+          role: "general",
+        }));
+
+        const validStaffIds = new Set(this.data.staff.map((s) => s.id));
+        for (const key of Object.keys(this.data.evaluations)) {
+          const ev = this.data.evaluations[key];
+          if (ev && !validStaffIds.has(ev.staff_id)) {
+            delete this.data.evaluations[key];
+          }
+        }
+      }
+
+      // アドバイザーの更新
+      if (Array.isArray(body.advisors)) {
+        body.advisors.forEach((adv) => {
           this.data.advisors[adv.floor] = adv.advisor_name;
         });
       }
 
+      // 評価データのLast-Write-Wins (LWW) マージ
       let hasUpdate = false;
-      if (result.evaluations) {
-        result.evaluations.forEach((remoteEval) => {
+      if (Array.isArray(body.evaluations)) {
+        body.evaluations.forEach((remoteEval) => {
           const key = `${remoteEval.staff_id}_${remoteEval.item_id}`;
           const localEval = this.data.evaluations[key];
 
-          if (!localEval || (remoteEval.updated_at && (!localEval.updated_at || remoteEval.updated_at > localEval.updated_at))) {
+          if (!localEval || !localEval.updated_at || remoteEval.updated_at >= localEval.updated_at) {
             this.data.evaluations[key] = {
               staff_id: remoteEval.staff_id,
               item_id: remoteEval.item_id,
@@ -171,16 +266,27 @@ class DataStore {
         });
       }
 
-      this.data.lastSyncedAt = result.serverTime || new Date().toISOString();
-      this.saveToLocal();
-      this.setSyncStatus("synced");
+      this.data.lastSyncedAt = body.serverTime || this.now();
+      this.saveToStorage();
+
+      if (this.syncQueue.length === 0) {
+        this.setSyncStatus("synced");
+      }
+
+      this.backoffFailures = 0;
+      this.backoffDelayMs = 2000;
 
       if (hasUpdate || !isBackground) {
         this.notify("data_updated");
       }
+      return true;
     } catch (err) {
-      // サーバー未起動やローカル時は静止のローカル保存モードにする（点滅させない）
-      this.setSyncStatus("local_safe");
+      if (!navigator.onLine) {
+        this.setSyncStatus("local_safe");
+      } else {
+        this.setSyncStatus("error", { error: err.message });
+      }
+      return false;
     }
   }
 
@@ -192,56 +298,100 @@ class DataStore {
     return this.data.staff.find((s) => s.id === staffId);
   }
 
+  // スタッフの保存（ミューテーションキューイング対応）
   async saveStaff(staffMember) {
-    const cleanStaff = { ...staffMember, role: "general" };
+    const cleanStaff = { ...staffMember, role: "general", updated_at: this.now() };
     const existingIndex = this.data.staff.findIndex((s) => s.id === cleanStaff.id);
     if (existingIndex >= 0) {
       this.data.staff[existingIndex] = { ...this.data.staff[existingIndex], ...cleanStaff };
     } else {
       this.data.staff.push(cleanStaff);
     }
-    this.saveToLocal();
+
+    // キューへ追加
+    this.syncQueue = this.syncQueue.filter(
+      (m) => !(m.type === "staff_save" && m.data.id === cleanStaff.id)
+    );
+    this.syncQueue.push({
+      type: "staff_save",
+      data: cleanStaff,
+    });
+    this.saveToStorage();
     this.notify("staff_changed");
 
-    try {
-      await fetch("/api/staff", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(cleanStaff),
-      });
-    } catch (e) {
-      console.warn("Cloud sync failed for staff, saved locally");
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+    } else {
+      this.flushSyncQueue();
     }
   }
 
+  // スタッフの削除（ミューテーションキューイング対応）
   async deleteStaff(staffId) {
     this.data.staff = this.data.staff.filter((s) => s.id !== staffId);
+
+    // 関連評価データのローカルパージ
     Object.keys(this.data.evaluations).forEach((k) => {
       if (k.startsWith(`${staffId}_`)) delete this.data.evaluations[k];
     });
-    this.saveToLocal();
+
+    // キュー内の該当スタッフの評価送信を除去し、削除ミューテーションを追加
+    this.syncQueue = this.syncQueue.filter(
+      (m) => !(m.type === "evaluation" && m.data.staff_id === staffId)
+    );
+    this.syncQueue = this.syncQueue.filter(
+      (m) => !(m.type === "staff_delete" && m.staffId === staffId)
+    );
+    this.syncQueue.push({
+      type: "staff_delete",
+      staffId,
+    });
+
+    this.saveToStorage();
     this.notify("staff_changed");
 
-    try {
-      await fetch(`/api/staff/${encodeURIComponent(staffId)}`, { method: "DELETE" });
-    } catch (e) {
-      console.warn("Cloud delete failed, deleted locally");
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+    } else {
+      this.flushSyncQueue();
     }
   }
 
+  // アドバイザー名の設定（ミューテーションキューイング対応）
   async setAdvisorName(floor, name) {
+    const updated = { floor, advisor_name: name, updated_at: this.now() };
     this.data.advisors[floor] = name;
-    this.saveToLocal();
+
+    this.syncQueue = this.syncQueue.filter(
+      (m) => !(m.type === "advisor_save" && m.data.floor === floor)
+    );
+    this.syncQueue.push({
+      type: "advisor_save",
+      data: updated,
+    });
+
+    this.saveToStorage();
     this.notify("advisor_changed", { floor, name });
 
-    try {
-      await fetch("/api/advisors", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ floor, advisor_name: name }),
-      });
-    } catch (e) {
-      console.warn("Cloud sync failed for advisor, saved locally");
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+    } else {
+      this.flushSyncQueue();
     }
   }
 
@@ -266,32 +416,44 @@ class DataStore {
     );
   }
 
+  // 評価の保存（ミューテーションキューイング対応）
   saveEvaluation(staffId, itemId, updates) {
     const key = `${staffId}_${itemId}`;
     const current = this.getEvaluation(staffId, itemId);
-    const now = new Date().toISOString();
+    const nowIso = this.now();
 
     const updated = {
       ...current,
       ...updates,
       staff_id: staffId,
       item_id: itemId,
-      updated_at: now,
+      updated_at: updates.updated_at || nowIso,
     };
 
     this.data.evaluations[key] = updated;
-    this.saveToLocal();
+
+    // キュー内同一アイテムの重複集約
+    this.syncQueue = this.syncQueue.filter(
+      (m) => !(m.type === "evaluation" && m.data.staff_id === staffId && m.data.item_id === itemId)
+    );
+    this.syncQueue.push({
+      type: "evaluation",
+      data: updated,
+    });
+
+    this.saveToStorage();
     this.notify("eval_updated", { staffId, itemId, record: updated });
 
-    this.queueSync(updated);
-  }
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
 
-  queueSync(evalRecord) {
-    this.syncQueue = this.syncQueue.filter(
-      (item) => !(item.staff_id === evalRecord.staff_id && item.item_id === evalRecord.item_id)
-    );
-    this.syncQueue.push(evalRecord);
-    this.triggerSyncDebounced();
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+    } else {
+      this.triggerSyncDebounced();
+    }
   }
 
   triggerSyncDebounced() {
@@ -301,37 +463,138 @@ class DataStore {
     }, 400);
   }
 
+  // 永続キューの一括フラッシュ処理（F5, F6, F7対応）
   async flushSyncQueue() {
-    if (this.syncQueue.length === 0 || this.isSyncing) return;
-
-    if (window.location.protocol === "file:") {
+    if (typeof window !== "undefined" && window.location.protocol === "file:") {
       this.syncQueue = [];
+      this.saveToStorage();
       this.setSyncStatus("local_safe");
-      return;
+      return false;
     }
 
-    const batch = [...this.syncQueue];
-    this.syncQueue = [];
-    this.isSyncing = true;
-
-    try {
-      const res = await fetch("/api/evaluations/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: batch }),
-      });
-
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      this.setSyncStatus("synced");
-    } catch (err) {
-      this.syncQueue = [...batch, ...this.syncQueue];
+    if (!navigator.onLine) {
       this.setSyncStatus("local_safe");
-    } finally {
-      this.isSyncing = false;
-      if (this.syncQueue.length > 0 && window.location.protocol !== "file:") {
-        this.triggerSyncDebounced();
+      return false;
+    }
+
+    if (this._syncPromise) {
+      await this._syncPromise;
+      if (this.syncQueue.length === 0 || !navigator.onLine) {
+        return navigator.onLine;
       }
     }
+
+    this._syncPromise = (async () => {
+      try {
+        while (this.syncQueue.length > 0 && navigator.onLine) {
+          const ok = await this._executeFlushBatch();
+          if (!ok) return false;
+        }
+        return true;
+      } finally {
+        this._syncPromise = null;
+      }
+    })();
+
+    return this._syncPromise;
+  }
+
+  async _executeFlushBatch() {
+    if (this.syncQueue.length === 0) {
+      this.setSyncStatus("synced");
+      return true;
+    }
+
+    if (!navigator.onLine) {
+      this.setSyncStatus("local_safe");
+      return false;
+    }
+
+    this.setSyncStatus("syncing");
+    const currentBatch = [...this.syncQueue];
+    this.syncQueue = [];
+
+    const evaluationItems = [];
+    const nonEvalMutations = [];
+
+    for (const m of currentBatch) {
+      if (m.type === "evaluation") {
+        evaluationItems.push(m.data);
+      } else {
+        nonEvalMutations.push(m);
+      }
+    }
+
+    try {
+      // 1. スタッフ・アドバイザーのミューテーションを先に実行
+      for (const mut of nonEvalMutations) {
+        if (mut.type === "staff_save") {
+          const res = await fetch("/api/staff", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mut.data),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } else if (mut.type === "staff_delete") {
+          const res = await fetch(`/api/staff/${encodeURIComponent(mut.staffId)}`, {
+            method: "DELETE",
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        } else if (mut.type === "advisor_save") {
+          const res = await fetch("/api/advisors", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(mut.data),
+          });
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }
+      }
+
+      // 2. 評価アイテムのバッチ送信
+      if (evaluationItems.length > 0) {
+        const res = await fetch("/api/evaluations/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ items: evaluationItems }),
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      }
+
+      this.saveToStorage();
+      this.setSyncStatus("synced");
+      this.backoffFailures = 0;
+      this.backoffDelayMs = 2000;
+      return true;
+    } catch (err) {
+      // 失敗時はバッチをキュー先頭へ戻し、指数バックオフで待機
+      this.syncQueue = [...currentBatch, ...this.syncQueue];
+      this.saveToStorage();
+      this.backoffFailures++;
+      this.backoffDelayMs = Math.min(30000, 2000 * Math.pow(2, this.backoffFailures - 1));
+
+      if (!navigator.onLine) {
+        this.setSyncStatus("local_safe");
+      } else {
+        this.setSyncStatus("error", { error: err.message, retryInMs: this.backoffDelayMs });
+        if (this.backoffTimer) clearTimeout(this.backoffTimer);
+        this.backoffTimer = setTimeout(() => {
+          if (navigator.onLine) this.flushSyncQueue();
+        }, this.backoffDelayMs);
+      }
+      return false;
+    }
+  }
+
+  // 手動再同期リトライ（F10対応）
+  async retrySyncManual() {
+    this.backoffFailures = 0;
+    this.backoffDelayMs = 2000;
+    if (this.backoffTimer) clearTimeout(this.backoffTimer);
+
+    this.setSyncStatus("syncing", { manual: true });
+    const flushOk = await this.flushSyncQueue();
+    const bootOk = await this.fetchBootstrap();
+    return flushOk && bootOk;
   }
 
   // スタッフ進捗率計算（全21中項目ベース）

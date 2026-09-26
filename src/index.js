@@ -27,9 +27,15 @@ export default {
     try {
       // 1. ヘルスチェック
       if (url.pathname === "/api/health") {
-        return new Response(JSON.stringify({ status: "ok", timestamp: new Date().toISOString() }), {
-          headers: corsHeaders,
-        });
+        const now = new Date().toISOString();
+        return new Response(
+          JSON.stringify({
+            status: "ok",
+            timestamp: now,
+            serverTime: now,
+          }),
+          { headers: corsHeaders }
+        );
       }
 
       // 2. ブートストラップ同期（全フロアスタッフ、アドバイザー、評価データの一括取得）
@@ -54,7 +60,14 @@ export default {
       if (url.pathname === "/api/staff") {
         if (method === "GET") {
           const res = await env.DB.prepare("SELECT * FROM staff ORDER BY floor, order_num, name").all();
-          return new Response(JSON.stringify({ success: true, staff: res.results || [] }), { headers: corsHeaders });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              staff: res.results || [],
+              serverTime: new Date().toISOString(),
+            }),
+            { headers: corsHeaders }
+          );
         }
         if (method === "POST") {
           const body = await request.json();
@@ -68,6 +81,9 @@ export default {
             });
           }
 
+          const updatedAt = body.updated_at || now;
+          const createdAt = body.created_at || updatedAt;
+
           await env.DB.prepare(
             `INSERT INTO staff (id, floor, name, role, order_num, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?)
@@ -76,57 +92,116 @@ export default {
                name = excluded.name,
                role = excluded.role,
                order_num = excluded.order_num,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at
+             WHERE excluded.updated_at >= staff.updated_at`
           )
-            .bind(id, floor, name, role, order_num, now, now)
+            .bind(id, floor, name, role, order_num, createdAt, updatedAt)
             .run();
 
-          return new Response(JSON.stringify({ success: true, message: "スタッフを保存しました" }), {
-            headers: corsHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "スタッフを保存しました",
+              staff: {
+                id,
+                floor,
+                name,
+                role,
+                order_num,
+                created_at: createdAt,
+                updated_at: updatedAt,
+              },
+              serverTime: now,
+            }),
+            { headers: corsHeaders }
+          );
         }
       }
 
       // スタッフ削除
       if (url.pathname.startsWith("/api/staff/") && method === "DELETE") {
         const staffId = decodeURIComponent(url.pathname.replace("/api/staff/", ""));
+        const now = new Date().toISOString();
         await env.DB.prepare("DELETE FROM staff WHERE id = ?").bind(staffId).run();
         await env.DB.prepare("DELETE FROM evaluations WHERE staff_id = ?").bind(staffId).run();
-        return new Response(JSON.stringify({ success: true, message: "削除しました" }), { headers: corsHeaders });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            message: "削除しました",
+            deletedId: staffId,
+            serverTime: now,
+          }),
+          { headers: corsHeaders }
+        );
       }
 
       // 4. アドバイザー設定 API
       if (url.pathname === "/api/advisors") {
         if (method === "GET") {
           const res = await env.DB.prepare("SELECT * FROM advisors").all();
-          return new Response(JSON.stringify({ success: true, advisors: res.results || [] }), { headers: corsHeaders });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              advisors: res.results || [],
+              serverTime: new Date().toISOString(),
+            }),
+            { headers: corsHeaders }
+          );
         }
         if (method === "POST") {
           const body = await request.json();
           const now = new Date().toISOString();
           const { floor, advisor_name } = body;
 
+          if (!floor || advisor_name === undefined) {
+            return new Response(JSON.stringify({ success: false, error: "必須項目が不足しています" }), {
+              status: 400,
+              headers: corsHeaders,
+            });
+          }
+
+          const updatedAt = body.updated_at || now;
+
           await env.DB.prepare(
             `INSERT INTO advisors (floor, advisor_name, updated_at)
              VALUES (?, ?, ?)
              ON CONFLICT(floor) DO UPDATE SET
                advisor_name = excluded.advisor_name,
-               updated_at = excluded.updated_at`
+               updated_at = excluded.updated_at
+             WHERE excluded.updated_at >= advisors.updated_at`
           )
-            .bind(floor, advisor_name, now)
+            .bind(floor, advisor_name, updatedAt)
             .run();
 
-          return new Response(JSON.stringify({ success: true, message: "アドバイザー名を更新しました" }), {
-            headers: corsHeaders,
-          });
+          return new Response(
+            JSON.stringify({
+              success: true,
+              message: "アドバイザー名を更新しました",
+              advisor: { floor, advisor_name, updated_at: updatedAt },
+              serverTime: now,
+            }),
+            { headers: corsHeaders }
+          );
         }
       }
 
       // 5. 評価データ即時同期 API（単一または複数件の一括更新）
       if (url.pathname === "/api/evaluations/sync" && method === "POST") {
         const body = await request.json();
-        const items = Array.isArray(body.items) ? body.items : [body];
+        const items = Array.isArray(body?.items) ? body.items : (Array.isArray(body) ? body : (body ? [body] : []));
         const now = new Date().toISOString();
+
+        if (items.length === 0) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              count: 0,
+              updated: 0,
+              serverTime: now,
+            }),
+            { headers: corsHeaders }
+          );
+        }
 
         const stmts = items.map((item) => {
           const {
@@ -143,7 +218,8 @@ export default {
 
           return env.DB.prepare(
             `INSERT INTO evaluations (staff_id, item_id, check_eval, score, checks_json, memo, evaluator_name, evaluation_date, updated_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+             SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?
+             WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)
              ON CONFLICT(staff_id, item_id) DO UPDATE SET
                check_eval = excluded.check_eval,
                score = excluded.score,
@@ -162,17 +238,36 @@ export default {
             memo || "",
             evaluator_name || "",
             evaluation_date || "",
-            updated_at
+            updated_at,
+            staff_id
           );
         });
 
+        let updated = 0;
         if (stmts.length > 0) {
-          await env.DB.batch(stmts);
+          const batchResults = await env.DB.batch(stmts);
+          if (Array.isArray(batchResults)) {
+            for (const res of batchResults) {
+              if (res && res.meta && typeof res.meta.changes === "number") {
+                updated += res.meta.changes;
+              } else if (res && typeof res.changes === "number") {
+                updated += res.changes;
+              } else if (res && res.meta && typeof res.meta.rows_written === "number") {
+                updated += res.meta.rows_written;
+              }
+            }
+          }
         }
 
-        return new Response(JSON.stringify({ success: true, count: stmts.length, serverTime: now }), {
-          headers: corsHeaders,
-        });
+        return new Response(
+          JSON.stringify({
+            success: true,
+            count: items.length,
+            updated: updated,
+            serverTime: now,
+          }),
+          { headers: corsHeaders }
+        );
       }
 
       // API ルートに一致しない場合は静的アセットを配信

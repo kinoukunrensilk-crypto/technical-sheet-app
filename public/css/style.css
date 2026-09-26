@@ -88,25 +88,45 @@ body {
   padding: 0.25rem 0.65rem;
   border-radius: 9999px;
   font-size: 0.75rem;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
   transition: all 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.sync-status:hover {
+  transform: scale(1.04);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .sync-status.synced {
-  background-color: #10b981;
-}
-
-.sync-status.local_safe {
-  background-color: #0284c7; /* 落ち着いた安心ブルー */
+  background-color: #16a34a; /* 🟢 クラウド同期済 */
 }
 
 .sync-status.syncing {
-  background-color: #0284c7;
+  background-color: #d97706; /* 🟡 同期中 */
+  animation: pulseSync 1.2s infinite ease-in-out;
 }
 
-.sync-status.offline {
-  background-color: #0284c7;
+.sync-status.local_safe {
+  background-color: #0284c7; /* 💾 ローカル保存中 */
+}
+
+.sync-status.error {
+  background-color: #dc2626; /* ⚠️ 同期エラー */
+  animation: shakeSync 0.4s ease-in-out;
+}
+
+@keyframes pulseSync {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.65; }
+}
+
+@keyframes shakeSync {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
 }
 
 .sync-dot {
