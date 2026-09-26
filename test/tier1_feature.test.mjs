@@ -502,7 +502,7 @@ describe("Tier 1: Feature Equivalence Class Suite (F1-F12)", () => {
 
     it("F7-03: Offline advisor update is queued and synced upon reconnection", async () => {
       const client = createSimulatedClient(env, { online: false });
-      client.setAdvisorName("5F", "5F特命アドバイザー");
+      await client.setAdvisorName("5F", "5F特命アドバイザー");
       assert.equal(client.syncQueue.length, 1);
       assert.equal(client.syncQueue[0].type, "advisor_save");
 
@@ -848,10 +848,8 @@ describe("Tier 1: Feature Equivalence Class Suite (F1-F12)", () => {
       const devA = createSimulatedClient(env, { name: "Admin_PC" });
       const devB = createSimulatedClient(env, { name: "Advisor_Tablet" });
 
-      devA.saveStaff({ id: "staff_extra_1", floor: "4F", name: "特別スタッフ" });
-      devB.setAdvisorName("4F", "新アドバイザー4F");
-
-      await Promise.all([devA.flushSyncQueue(), devB.flushSyncQueue()]);
+      await devA.saveStaff({ id: "staff_extra_1", floor: "4F", name: "特別スタッフ" });
+      await devB.setAdvisorName("4F", "新アドバイザー4F");
 
       const staff = await d1.prepare("SELECT name FROM staff WHERE id = 'staff_extra_1'").first("name");
       const adv = await d1.prepare("SELECT advisor_name FROM advisors WHERE floor = '4F'").first("advisor_name");
