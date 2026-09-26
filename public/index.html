@@ -20,6 +20,7 @@
         </div>
       </div>
       <div class="header-actions no-print">
+        <button class="btn btn-outline btn-sm" id="btn-open-qr-modal" title="スマホ・iPad用QRコード表示" style="font-weight: 700; color: #0284c7; border-color: #0284c7;">📱 スマホ用QR</button>
         <button class="btn btn-outline btn-sm" id="btn-open-advisor-modal" title="アドバイザー担当設定">👤 担当設定</button>
         <button class="btn btn-outline btn-sm" id="btn-export-json" title="データバックアップ">💾 保存</button>
         <label class="btn btn-outline btn-sm" style="cursor: pointer;" title="データ復元">
@@ -124,6 +125,33 @@
           <button type="submit" class="btn btn-primary">設定を保存</button>
         </div>
       </form>
+    </div>
+  </div>
+
+  <!-- スマホ・iPad接続用QRコードモーダル -->
+  <div class="modal-overlay" id="qr-modal">
+    <div class="modal-content" style="max-width: 420px; text-align: center;">
+      <div class="modal-header" style="justify-content: center;">
+        <h3 class="modal-title">📱 スマホ・iPad接続用QRコード</h3>
+      </div>
+      <div style="padding: 1rem 0;">
+        <div style="background: #ffffff; padding: 1rem; border-radius: 12px; display: inline-block; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid var(--da-border);">
+          <img src="assets/qr_code.png" alt="テクニカルシート評価システム QRコード" style="width: 220px; height: 220px; display: block;">
+        </div>
+        <p style="margin-top: 1rem; font-size: 0.88rem; color: #334155; line-height: 1.5;">
+          各アドバイザーの<strong>スマホのカメラ</strong>や<strong>法人のiPad</strong>で上記QRコードを読み取ると、現場でそのまま入力できます。
+        </p>
+        <div style="margin-top: 0.75rem; padding: 0.6rem; background-color: #f1f5f9; border-radius: 6px; font-size: 0.75rem; word-break: break-all; color: #475569;">
+          https://kinoukunrensilk-crypto.github.io/technical-sheet-app/
+        </div>
+        <p style="margin-top: 0.5rem; font-size: 0.75rem; color: #16a34a; font-weight: 700;">
+          🟢 PC電源オフ時も24時間365日いつでも現場で利用可能
+        </p>
+      </div>
+      <div style="display: flex; justify-content: center; gap: 0.5rem; margin-top: 0.5rem;">
+        <button type="button" class="btn btn-outline" id="btn-copy-qr-url">URLをコピー</button>
+        <button type="button" class="btn btn-primary" id="btn-close-qr-modal">閉じる</button>
+      </div>
     </div>
   </div>
 

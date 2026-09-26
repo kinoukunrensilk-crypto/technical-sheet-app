@@ -583,6 +583,24 @@ document.addEventListener("DOMContentLoaded", () => {
   document.getElementById("btn-open-advisor-modal")?.addEventListener("click", openAdvisorModal);
   document.getElementById("btn-add-staff")?.addEventListener("click", () => openStaffModal());
 
+  // QRコードモーダル制御
+  const qrModal = document.getElementById("qr-modal");
+  document.getElementById("btn-open-qr-modal")?.addEventListener("click", () => {
+    qrModal?.classList.add("active");
+  });
+  document.getElementById("btn-close-qr-modal")?.addEventListener("click", () => {
+    qrModal?.classList.remove("active");
+  });
+  document.getElementById("btn-copy-qr-url")?.addEventListener("click", async () => {
+    const url = "https://kinoukunrensilk-crypto.github.io/technical-sheet-app/";
+    try {
+      await navigator.clipboard.writeText(url);
+      alert("スマホ用URLをクリップボードにコピーしました！\n" + url);
+    } catch (e) {
+      prompt("以下のURLをコピーしてスマホで開いてください:", url);
+    }
+  });
+
   // ----------------------------------------------------
   // 6. JSONバックアップ / エクスポート
   // ----------------------------------------------------
