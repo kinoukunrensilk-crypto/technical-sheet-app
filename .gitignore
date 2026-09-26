@@ -1,0 +1,16 @@
+# Logs & temporary files
+node_modules/
+.wrangler/
+.env*
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Build & scratch outputs
+dist/
+.system_generated/
+scratch/

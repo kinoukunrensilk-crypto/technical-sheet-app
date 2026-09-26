@@ -1,0 +1,23 @@
+{
+  "name": "technical-sheet-app",
+  "version": "1.0.0",
+  "description": "介護スタッフ テクニカルシート評価システム（フロア担当制・スマホ/iPad/PC対応・Cloudflare D1リアルタイム同期）",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "d1:init": "wrangler d1 execute technical_sheet_db --file=./schema.sql"
+  },
+  "keywords": [
+    "care",
+    "evaluation",
+    "technical-sheet",
+    "cloudflare-workers",
+    "d1"
+  ],
+  "author": "シルクロード七福神",
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "wrangler": "^4.141.0"
+  }
+}

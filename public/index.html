@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>介護スタッフ テクニカルシート評価システム</title>
+  <link rel="stylesheet" href="css/style.css">
+  <meta name="theme-color" content="#004098">
+</head>
+<body>
+
+  <!-- アプリヘッダー -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="app-brand">
+        <h1 class="app-title">📋 介護テクニカルシート評価</h1>
+        <div id="sync-status" class="sync-status synced" title="クラウド同期状態">
+          <span class="sync-dot"></span>
+          <span class="sync-text">クラウド同期済</span>
+        </div>
+      </div>
+      <div class="header-actions no-print">
+        <button class="btn btn-outline btn-sm" id="btn-open-advisor-modal" title="アドバイザー担当設定">👤 担当設定</button>
+        <button class="btn btn-outline btn-sm" id="btn-export-json" title="データバックアップ">💾 保存</button>
+        <label class="btn btn-outline btn-sm" style="cursor: pointer;" title="データ復元">
+          📂 復元
+          <input type="file" id="file-import-json" accept=".json" style="display: none;">
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <!-- フロア選択タブ（2F〜5F） -->
+  <nav class="floor-nav no-print">
+    <div class="floor-tabs" id="floor-tabs">
+      <!-- JSで動的生成 -->
+    </div>
+  </nav>
+
+  <!-- メインコンテンツ -->
+  <main class="main-container">
+    <!-- サイドバー：スタッフ一覧 -->
+    <aside class="sidebar no-print">
+      <div class="sidebar-header">
+        <h2 class="sidebar-title">スタッフ一覧</h2>
+        <button class="btn btn-primary btn-sm" id="btn-add-staff">＋ 追加</button>
+      </div>
+      <div class="staff-list" id="staff-list">
+        <!-- JSで動的生成 -->
+      </div>
+    </aside>
+
+    <!-- 評価入力エリア -->
+    <section class="eval-area">
+      <!-- 固定対象者バー -->
+      <div class="target-banner" id="target-banner" style="display: none;">
+        <!-- JSで動的更新 -->
+      </div>
+
+      <!-- テクニカルシート大項目アコーディオン -->
+      <div id="eval-area">
+        <!-- JSで動的生成 -->
+      </div>
+    </section>
+  </main>
+
+  <!-- スタッフ追加・編集モーダル -->
+  <div class="modal-overlay" id="staff-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title" id="staff-modal-title">スタッフ情報編集</h3>
+      </div>
+      <form id="staff-form">
+        <input type="hidden" id="staff-id">
+        <div class="form-group">
+          <label class="form-label" for="staff-floor">所属フロア</label>
+          <select id="staff-floor" class="form-control" required>
+            <option value="2F">2F</option>
+            <option value="3F">3F</option>
+            <option value="4F">4F</option>
+            <option value="5F">5F</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="staff-name">氏名</label>
+          <input type="text" id="staff-name" class="form-control" placeholder="例: 山田 太郎" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="staff-role">職位・区分</label>
+          <select id="staff-role" class="form-control" required>
+            <option value="general">一般スタッフ（基本介護技術・利用者視点）</option>
+            <option value="s_class">Sクラス・リーダー層（全項目：指導育成含む）</option>
+          </select>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="btn-delete-staff" style="color: var(--da-danger); border-color: var(--da-danger); display: none;">削除</button>
+          <div style="display: flex; gap: 0.5rem; margin-left: auto;">
+            <button type="button" class="btn btn-outline" id="btn-cancel-staff">キャンセル</button>
+            <button type="submit" class="btn btn-primary">保存する</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- アドバイザー設定モーダル -->
+  <div class="modal-overlay" id="advisor-modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">フロア別担当アドバイザー設定</h3>
+      </div>
+      <form id="advisor-form">
+        <div class="form-group">
+          <label class="form-label" for="adv-2f">2F 担当アドバイザー</label>
+          <input type="text" id="adv-2f" class="form-control" placeholder="氏名または役職">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="adv-3f">3F 担当アドバイザー</label>
+          <input type="text" id="adv-3f" class="form-control" placeholder="氏名または役職">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="adv-4f">4F 担当アドバイザー</label>
+          <input type="text" id="adv-4f" class="form-control" placeholder="氏名または役職">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="adv-5f">5F 担当アドバイザー</label>
+          <input type="text" id="adv-5f" class="form-control" placeholder="氏名または役職">
+        </div>
+        <div style="display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 1rem;">
+          <button type="button" class="btn btn-outline" id="btn-cancel-advisor">キャンセル</button>
+          <button type="submit" class="btn btn-primary">設定を保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- JavaScript読み込み -->
+  <script src="js/technical_sheet_data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
