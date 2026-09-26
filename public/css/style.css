@@ -85,11 +85,10 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.25rem 0.6rem;
+  padding: 0.25rem 0.65rem;
   border-radius: 9999px;
   font-size: 0.75rem;
   font-weight: 600;
-  background-color: rgba(255, 255, 255, 0.2);
   color: #ffffff;
   transition: all 0.3s ease;
 }
@@ -98,12 +97,16 @@ body {
   background-color: #10b981;
 }
 
+.sync-status.local_safe {
+  background-color: #0284c7; /* 落ち着いた安心ブルー */
+}
+
 .sync-status.syncing {
-  background-color: #f59e0b;
+  background-color: #0284c7;
 }
 
 .sync-status.offline {
-  background-color: #ef4444;
+  background-color: #0284c7;
 }
 
 .sync-dot {
@@ -539,14 +542,44 @@ body {
 }
 
 .checkpoint-subchecks {
-  margin-top: 0.25rem;
-  padding-left: 1rem;
-  font-size: 0.82rem;
-  color: var(--da-text-muted);
+  margin-top: 0.5rem;
+  padding-left: 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  border-left: 3px solid #cbd5e1;
 }
 
-.checkpoint-subchecks li {
-  list-style-type: square;
+.subcheck-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  cursor: pointer;
+  user-select: none;
+  background-color: #ffffff;
+  border: 1px solid #e2e8f0;
+  transition: all 0.15s ease;
+}
+
+.subcheck-row:hover {
+  background-color: #f1f5f9;
+  border-color: var(--da-primary);
+}
+
+.subcheck-checkbox {
+  width: 19px;
+  height: 19px;
+  margin-top: 2px;
+  accent-color: var(--da-primary);
+  cursor: pointer;
+}
+
+.subcheck-text {
+  font-size: 0.85rem;
+  color: #334155;
+  line-height: 1.45;
 }
 
 /* 自由記載欄 */

@@ -105,19 +105,29 @@ class DataStore {
 
   // 起動時のクラウド同期 & 定期ポーリング開始
   async startRealtimeSync() {
+    // file:// プロトコル（ローカル直接起動）の場合はクラウドAPIが存在しないためローカル保存モードで安定稼働
+    if (window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
     await this.fetchBootstrap();
 
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
         this.fetchBootstrap(true);
-      }, 5000);
+      }, 8000); // 穏やかなポーリング間隔
     }
   }
 
   // クラウドから全データ取得 & ローカルとのマージ
   async fetchBootstrap(isBackground = false) {
+    if (window.location.protocol === "file:") {
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
     try {
-      if (!isBackground) this.setSyncStatus("syncing");
       const res = await fetch("/api/bootstrap", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
@@ -169,7 +179,8 @@ class DataStore {
         this.notify("data_updated");
       }
     } catch (err) {
-      this.setSyncStatus("offline");
+      // サーバー未起動やローカル時は静止のローカル保存モードにする（点滅させない）
+      this.setSyncStatus("local_safe");
     }
   }
 
@@ -293,10 +304,15 @@ class DataStore {
   async flushSyncQueue() {
     if (this.syncQueue.length === 0 || this.isSyncing) return;
 
+    if (window.location.protocol === "file:") {
+      this.syncQueue = [];
+      this.setSyncStatus("local_safe");
+      return;
+    }
+
     const batch = [...this.syncQueue];
     this.syncQueue = [];
     this.isSyncing = true;
-    this.setSyncStatus("syncing");
 
     try {
       const res = await fetch("/api/evaluations/sync", {
@@ -309,10 +325,10 @@ class DataStore {
       this.setSyncStatus("synced");
     } catch (err) {
       this.syncQueue = [...batch, ...this.syncQueue];
-      this.setSyncStatus("offline");
+      this.setSyncStatus("local_safe");
     } finally {
       this.isSyncing = false;
-      if (this.syncQueue.length > 0) {
+      if (this.syncQueue.length > 0 && window.location.protocol !== "file:") {
         this.triggerSyncDebounced();
       }
     }

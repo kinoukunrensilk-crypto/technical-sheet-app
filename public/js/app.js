@@ -238,36 +238,106 @@ document.addEventListener("DOMContentLoaded", () => {
             cpContainer.className = "checkpoints-list";
 
             mid.checkpoints.forEach((cp) => {
-              const isChecked = checkedCps.has(cp.id);
+              const cpGroup = document.createElement("div");
+              cpGroup.className = "checkpoint-group";
+              cpGroup.style.display = "flex";
+              cpGroup.style.flexDirection = "column";
+              cpGroup.style.gap = "0.35rem";
+
+              const hasSubChecks = cp.sub_checks && cp.sub_checks.length > 0;
+              const subCheckIds = hasSubChecks ? cp.sub_checks.map((_, idx) => `${cp.id}_sc_${idx}`) : [];
+
+              // 全小項目がチェックされているか、または親IDが保存されているか
+              const allSubsChecked = hasSubChecks && subCheckIds.every((scId) => checkedCps.has(scId));
+              const isParentChecked = checkedCps.has(cp.id) || allSubsChecked;
+
+              // 親の点検項目行
               const cpRow = document.createElement("label");
               cpRow.className = "checkpoint-row";
-
-              const subChecksHtml =
-                cp.sub_checks && cp.sub_checks.length > 0
-                  ? `<ul class="checkpoint-subchecks">${cp.sub_checks.map((sc) => `<li>${escapeHtml(sc)}</li>`).join("")}</ul>`
-                  : "";
-
               cpRow.innerHTML = `
-                <input type="checkbox" class="checkpoint-checkbox" ${isChecked ? "checked" : ""} data-cp-id="${cp.id}">
+                <input type="checkbox" class="checkpoint-checkbox" ${isParentChecked ? "checked" : ""} data-cp-id="${cp.id}">
                 <div class="checkpoint-body">
                   <div class="checkpoint-main"><strong>${escapeHtml(cp.num)}</strong> ${escapeHtml(cp.text)}</div>
-                  ${subChecksHtml}
                 </div>
               `;
 
-              const checkbox = cpRow.querySelector(".checkpoint-checkbox");
-              checkbox.addEventListener("change", () => {
+              const parentCheckbox = cpRow.querySelector(".checkpoint-checkbox");
+
+              // 小項目（sub_checks）チェックボックスリスト
+              let subCheckboxes = [];
+              let subContainer = null;
+
+              if (hasSubChecks) {
+                subContainer = document.createElement("div");
+                subContainer.className = "checkpoint-subchecks";
+
+                cp.sub_checks.forEach((sc, scIdx) => {
+                  const scId = `${cp.id}_sc_${scIdx}`;
+                  // 親がチェック済みの場合は小項目もONとして扱う
+                  const isScChecked = checkedCps.has(scId) || isParentChecked;
+
+                  const scRow = document.createElement("label");
+                  scRow.className = "subcheck-row";
+                  scRow.innerHTML = `
+                    <input type="checkbox" class="subcheck-checkbox" ${isScChecked ? "checked" : ""} data-sc-id="${scId}">
+                    <span class="subcheck-text">${escapeHtml(sc)}</span>
+                  `;
+
+                  const scCheckbox = scRow.querySelector(".subcheck-checkbox");
+                  subCheckboxes.push({ id: scId, el: scCheckbox });
+
+                  // 小項目チェック変更イベント
+                  scCheckbox.addEventListener("change", () => {
+                    const currentRecord = store.getEvaluation(staff.id, mid.id);
+                    const currentSet = new Set(currentRecord.checks_json || []);
+
+                    if (scCheckbox.checked) {
+                      currentSet.add(scId);
+                    } else {
+                      currentSet.delete(scId);
+                      currentSet.delete(cp.id); // 小項目が1つでも外れたら親も外す
+                      parentCheckbox.checked = false;
+                    }
+
+                    // 全小項目がチェックされたら親も自動チェック
+                    const allNowChecked = subCheckIds.every((id) => currentSet.has(id));
+                    if (allNowChecked) {
+                      currentSet.add(cp.id);
+                      parentCheckbox.checked = true;
+                    }
+
+                    store.saveEvaluation(staff.id, mid.id, { checks_json: Array.from(currentSet) });
+                  });
+
+                  subContainer.appendChild(scRow);
+                });
+              }
+
+              // 親チェック変更イベント（配下の小項目と全連動）
+              parentCheckbox.addEventListener("change", () => {
                 const currentRecord = store.getEvaluation(staff.id, mid.id);
                 const currentSet = new Set(currentRecord.checks_json || []);
-                if (checkbox.checked) {
+
+                if (parentCheckbox.checked) {
                   currentSet.add(cp.id);
+                  subCheckboxes.forEach((sc) => {
+                    sc.el.checked = true;
+                    currentSet.add(sc.id);
+                  });
                 } else {
                   currentSet.delete(cp.id);
+                  subCheckboxes.forEach((sc) => {
+                    sc.el.checked = false;
+                    currentSet.delete(sc.id);
+                  });
                 }
+
                 store.saveEvaluation(staff.id, mid.id, { checks_json: Array.from(currentSet) });
               });
 
-              cpContainer.appendChild(cpRow);
+              cpGroup.appendChild(cpRow);
+              if (subContainer) cpGroup.appendChild(subContainer);
+              cpContainer.appendChild(cpGroup);
             });
 
             card.appendChild(cpContainer);
