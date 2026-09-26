@@ -743,15 +743,6 @@ window.TECHNICAL_SHEET_MASTER = [
           },
           {
             "id": "item_016",
-            "raw_row": 136,
-            "title": "（対応すべき事態が起こった場合に現認。日ごろの様子観察及びヒアリングから評価）",
-            "has_check_eval": true,
-            "has_score": true,
-            "has_memo": true,
-            "checkpoints": []
-          },
-          {
-            "id": "item_017",
             "raw_row": 137,
             "title": "（１） 咳やむせこみに対応ができる",
             "has_check_eval": true,
@@ -759,7 +750,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_017_cp_1",
+                "id": "item_016_cp_1",
                 "num": "①",
                 "text": "咳の強さ、顔色等の観察をしたか。",
                 "sub_checks": [
@@ -768,7 +759,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_017_cp_2",
+                "id": "item_016_cp_2",
                 "num": "②",
                 "text": "利用者様が食物がつかえてむせこんでいる場合に、次の順で適切な対応ができたか。",
                 "sub_checks": [
@@ -779,7 +770,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_017_cp_3",
+                "id": "item_016_cp_3",
                 "num": "③",
                 "text": "記録をしたか。",
                 "sub_checks": [
@@ -791,7 +782,7 @@ window.TECHNICAL_SHEET_MASTER = [
             ]
           },
           {
-            "id": "item_018",
+            "id": "item_017",
             "raw_row": 144,
             "title": "（２） 便・尿の異常（血便・血尿、バイタル、ショック状態など）に対応ができる",
             "has_check_eval": true,
@@ -799,11 +790,52 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_018_cp_1",
+                "id": "item_017_cp_1",
                 "num": "①",
                 "text": "本人の様子（バイタル、ショック状態等）や便、尿（色やにおい、血液が混入していないかどうか等）を観察・確認したか。",
                 "sub_checks": [
                   "本人の異常に気づいた際、適切に対応できているか",
+                  "必要時には周りに助けを求めているか"
+                ]
+              },
+              {
+                "id": "item_017_cp_2",
+                "num": "②",
+                "text": "原因の探索と確認をしたか。",
+                "sub_checks": []
+              },
+              {
+                "id": "item_017_cp_3",
+                "num": "③",
+                "text": "（血液の混入、悪臭、バイタル値の異常やショック状態が観察された場合等）医療職に連絡したか。",
+                "sub_checks": []
+              },
+              {
+                "id": "item_017_cp_4",
+                "num": "④",
+                "text": "記録をしたか。",
+                "sub_checks": [
+                  "リーダーや先輩に報告をしているか",
+                  "周りの職員と情報共有しているか",
+                  "事実のみの記録ができているか（予想や想像・言い訳を書いていない）"
+                ]
+              }
+            ]
+          },
+          {
+            "id": "item_018",
+            "raw_row": 152,
+            "title": "（３） 皮膚の異常（炎症、表皮剥離、水泡、潰瘍等）に対応ができる",
+            "has_check_eval": true,
+            "has_score": true,
+            "has_memo": true,
+            "checkpoints": [
+              {
+                "id": "item_018_cp_1",
+                "num": "①",
+                "text": "皮膚の症状（大きさ、深さ、出血・浸出液・臭気の有無等）や本人の様子（痛みやかゆみの有無等）の観察をしたか。",
+                "sub_checks": [
+                  "皮膚の異常に気付いた際に適切に対応できているか",
                   "必要時には周りに助けを求めているか"
                 ]
               },
@@ -816,7 +848,7 @@ window.TECHNICAL_SHEET_MASTER = [
               {
                 "id": "item_018_cp_3",
                 "num": "③",
-                "text": "（血液の混入、悪臭、バイタル値の異常やショック状態が観察された場合等）医療職に連絡したか。",
+                "text": "(かゆがっていたり、炎症、表皮剥離、水泡、潰瘍が観察された場合等）医療職に連絡したか。",
                 "sub_checks": []
               },
               {
@@ -833,47 +865,6 @@ window.TECHNICAL_SHEET_MASTER = [
           },
           {
             "id": "item_019",
-            "raw_row": 152,
-            "title": "（３） 皮膚の異常（炎症、表皮剥離、水泡、潰瘍等）に対応ができる",
-            "has_check_eval": true,
-            "has_score": true,
-            "has_memo": true,
-            "checkpoints": [
-              {
-                "id": "item_019_cp_1",
-                "num": "①",
-                "text": "皮膚の症状（大きさ、深さ、出血・浸出液・臭気の有無等）や本人の様子（痛みやかゆみの有無等）の観察をしたか。",
-                "sub_checks": [
-                  "皮膚の異常に気付いた際に適切に対応できているか",
-                  "必要時には周りに助けを求めているか"
-                ]
-              },
-              {
-                "id": "item_019_cp_2",
-                "num": "②",
-                "text": "原因の探索と確認をしたか。",
-                "sub_checks": []
-              },
-              {
-                "id": "item_019_cp_3",
-                "num": "③",
-                "text": "(かゆがっていたり、炎症、表皮剥離、水泡、潰瘍が観察された場合等）医療職に連絡したか。",
-                "sub_checks": []
-              },
-              {
-                "id": "item_019_cp_4",
-                "num": "④",
-                "text": "記録をしたか。",
-                "sub_checks": [
-                  "リーダーや先輩に報告をしているか",
-                  "周りの職員と情報共有しているか",
-                  "事実のみの記録ができているか（予想や想像・言い訳を書いていない）"
-                ]
-              }
-            ]
-          },
-          {
-            "id": "item_020",
             "raw_row": 160,
             "title": "（４） 認知症の方がいつもと違う行動（攻撃的行動、突発的行動、対応が困難な行動等）を行った場合 に対応できる",
             "has_check_eval": true,
@@ -881,7 +872,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_020_cp_1",
+                "id": "item_019_cp_1",
                 "num": "①",
                 "text": "いつもと違う行動が見られた利用者様を観察し、脅威や不安を感じない（利用者様の表情・行動にネガティブな変化がない）よう近づき、声をかける等対応し、利用者様の行動や表情から不安・不快感等を軽減させることができたか。",
                 "sub_checks": [
@@ -892,13 +883,13 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_020_cp_2",
+                "id": "item_019_cp_2",
                 "num": "②",
                 "text": "いつもと違う行動が見られた利用者様の表情、感情表現、行動などいつもと違う様子について確認し、なぜそのような行動をしたか、職員対応や本人の生活環境の変化等を確認し、記録したか。",
                 "sub_checks": []
               },
               {
-                "id": "item_020_cp_3",
+                "id": "item_019_cp_3",
                 "num": "③",
                 "text": "いつもと違う行動が見られた利用者様がなぜそのような行動をしたかを、心身状況、生活歴、価値観・嗜好、ご家族・他者との関係、ご家族から収集した情報等を確認し、記録したか。",
                 "sub_checks": [
@@ -921,7 +912,7 @@ window.TECHNICAL_SHEET_MASTER = [
         "title": "Ⅱ．利用者様視点での評価",
         "mid_items": [
           {
-            "id": "item_021",
+            "id": "item_020",
             "raw_row": 170,
             "title": "（１） クレーム対応ができる",
             "has_check_eval": true,
@@ -929,7 +920,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_021_cp_1",
+                "id": "item_020_cp_1",
                 "num": "①",
                 "text": "（自分で対応できない場合）相談・苦情の内容について、上司に報告し、対応を依頼することができたか。",
                 "sub_checks": [
@@ -937,7 +928,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_021_cp_2",
+                "id": "item_020_cp_2",
                 "num": "②",
                 "text": "クレームの内容及び関連情報を正確に把握・収集し、わかりやすく整理することができたか。",
                 "sub_checks": [
@@ -945,7 +936,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_021_cp_3",
+                "id": "item_020_cp_3",
                 "num": "③",
                 "text": "クレームの要因を特定し、解決策または再発防止策を考えることができたか。",
                 "sub_checks": [
@@ -953,7 +944,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_021_cp_4",
+                "id": "item_020_cp_4",
                 "num": "④",
                 "text": "クレームに対する解決策または再発防止策を利用者様やご家族に説明し、納得してもらえたか。",
                 "sub_checks": [
@@ -961,7 +952,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_021_cp_5",
+                "id": "item_020_cp_5",
                 "num": "⑤",
                 "text": "クレームに対する解決策について、チームメンバーと共有し、解決策が継続的に実践されるよう働きかけを行ったか。",
                 "sub_checks": [
@@ -971,7 +962,7 @@ window.TECHNICAL_SHEET_MASTER = [
             ]
           },
           {
-            "id": "item_022",
+            "id": "item_021",
             "raw_row": 179,
             "title": "（２） 利用者様特性に応じたコミュニケーションができる",
             "has_check_eval": true,
@@ -979,7 +970,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_022_cp_1",
+                "id": "item_021_cp_1",
                 "num": "①",
                 "text": "ご家族に利用者様の日頃の様子などの情報を積極的に伝えることができたか。",
                 "sub_checks": [
@@ -987,7 +978,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_022_cp_2",
+                "id": "item_021_cp_2",
                 "num": "②",
                 "text": "利用者様が興味関心を持てるような話題を取り上げ、コミュニケーションをとったか。",
                 "sub_checks": [
@@ -995,7 +986,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_022_cp_3",
+                "id": "item_021_cp_3",
                 "num": "③",
                 "text": "利用者様の話に耳を貸し、意思表示を把握し、理解することができたか。",
                 "sub_checks": [
@@ -1004,7 +995,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_022_cp_4",
+                "id": "item_021_cp_4",
                 "num": "④",
                 "text": "認知症の利用者様に対し、その特性に応じた声かけやジェスチャー、表情等により、利用者様の意向を確認し、介護の内容を伝えることができたか。",
                 "sub_checks": [
@@ -1012,7 +1003,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_022_cp_5",
+                "id": "item_021_cp_5",
                 "num": "⑤",
                 "text": "視覚障害の利用者様に対し、その特性に応じた声かけをし、利用者様の意向を確認し、介護の内容を伝えることができたか。",
                 "sub_checks": [
@@ -1020,7 +1011,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_022_cp_6",
+                "id": "item_021_cp_6",
                 "num": "⑥",
                 "text": "聴覚障害・難聴の利用者様に対し、その特性に応じた声かけやジェスチャー、表情等により、利用者様の意向を確認し、介護の内容を伝えることができたか。",
                 "sub_checks": [
@@ -1042,7 +1033,7 @@ window.TECHNICAL_SHEET_MASTER = [
         "title": "Ⅲ．指導育成・業務支援（Sクラスのみ）",
         "mid_items": [
           {
-            "id": "item_023",
+            "id": "item_022",
             "raw_row": 190,
             "title": "（１） 現場で適切な技術指導ができる",
             "has_check_eval": true,
@@ -1050,7 +1041,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_023_cp_1",
+                "id": "item_022_cp_1",
                 "num": "①",
                 "text": "利用者様主役の視点に基づいた現場での指導ができているか",
                 "sub_checks": [
@@ -1060,7 +1051,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_023_cp_2",
+                "id": "item_022_cp_2",
                 "num": "②",
                 "text": "職員の気づきとやる気を引き出せているか",
                 "sub_checks": [
@@ -1069,7 +1060,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_023_cp_3",
+                "id": "item_022_cp_3",
                 "num": "③",
                 "text": "自分自身のスキルアップに継続的に取り組んでいるか",
                 "sub_checks": [
@@ -1080,7 +1071,7 @@ window.TECHNICAL_SHEET_MASTER = [
             ]
           },
           {
-            "id": "item_024",
+            "id": "item_023",
             "raw_row": 197,
             "title": "（２） 部下の業務支援を適切に行っている",
             "has_check_eval": true,
@@ -1088,7 +1079,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_024_cp_1",
+                "id": "item_023_cp_1",
                 "num": "①",
                 "text": "職員の遅刻・欠勤・早退や利用者様の状況（通所においてはキャンセル等含む）を把握し、柔軟にシフトや業務スケジュールの調整ができているか",
                 "sub_checks": [
@@ -1097,7 +1088,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_024_cp_2",
+                "id": "item_023_cp_2",
                 "num": "②",
                 "text": "スタッフと定期的に対話し、悩みや要望を聞きながら意味づけ・動機づけができているか",
                 "sub_checks": [
@@ -1106,7 +1097,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_024_cp_3",
+                "id": "item_023_cp_3",
                 "num": "③",
                 "text": "研修・勉強会・ミーティング等を通じて、チーム全体の成長を支援できているか",
                 "sub_checks": [
@@ -1117,7 +1108,7 @@ window.TECHNICAL_SHEET_MASTER = [
             ]
           },
           {
-            "id": "item_025",
+            "id": "item_024",
             "raw_row": 204,
             "title": "（３） 評価者として適切に評価できる",
             "has_check_eval": true,
@@ -1125,7 +1116,7 @@ window.TECHNICAL_SHEET_MASTER = [
             "has_memo": true,
             "checkpoints": [
               {
-                "id": "item_025_cp_1",
+                "id": "item_024_cp_1",
                 "num": "①",
                 "text": "職員と目標を一緒に確認・設定できているか",
                 "sub_checks": [
@@ -1134,7 +1125,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_025_cp_2",
+                "id": "item_024_cp_2",
                 "num": "②",
                 "text": "私心なく、客観的な視点で職員を評価できているか",
                 "sub_checks": [
@@ -1143,7 +1134,7 @@ window.TECHNICAL_SHEET_MASTER = [
                 ]
               },
               {
-                "id": "item_025_cp_3",
+                "id": "item_024_cp_3",
                 "num": "③",
                 "text": "日頃から職員の状況を把握できているか（普段から観察し評価しているか）",
                 "sub_checks": [
