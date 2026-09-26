@@ -51,8 +51,8 @@ document.addEventListener("DOMContentLoaded", () => {
   syncStatusEl?.addEventListener("click", async () => {
     updateSyncStatus("syncing");
     const ok = await store.retrySyncManual();
+    updateSyncStatus(store.syncStatus);
     if (ok) {
-      updateSyncStatus("synced");
       renderFloorTabs();
       renderStaffList();
       renderEvaluationSheet();

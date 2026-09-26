@@ -44,6 +44,22 @@ class DataStore {
     this.setupNetworkListeners();
   }
 
+  // APIエンドポイントベースURLの取得
+  getApiUrl(path) {
+    const base = (typeof window !== "undefined" && window.TECHNICAL_SHEET_API_BASE) || "";
+    return `${base}${path}`;
+  }
+
+  // 静的ホスティング（GitHub Pages等）で外部APIが未指定かどうかの判定
+  isStaticHostingWithoutApi() {
+    if (typeof window === "undefined") return false;
+    if (window.location.protocol === "file:") return true;
+    if (window.location.hostname.endsWith("github.io") && !window.TECHNICAL_SHEET_API_BASE) {
+      return true;
+    }
+    return false;
+  }
+
   // 現在時刻（サーバー時刻ズレ補正済みISO文字列）
   now() {
     return new Date(Date.now() + this.serverClockOffsetMs).toISOString();
@@ -172,7 +188,7 @@ class DataStore {
 
   // 起動時の同期開始
   async startRealtimeSync() {
-    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+    if (this.isStaticHostingWithoutApi()) {
       this.setSyncStatus("local_safe");
       return;
     }
@@ -184,7 +200,7 @@ class DataStore {
 
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
-        if (navigator.onLine && !this.isSyncing) {
+        if (navigator.onLine && !this.isSyncing && !this.isStaticHostingWithoutApi()) {
           this.fetchBootstrap(true);
         }
       }, 8000);
@@ -193,9 +209,9 @@ class DataStore {
 
   // クラウドから最新データ取得 & ローカルとの安全マージ（F8対応）
   async fetchBootstrap(isBackground = false) {
-    if (typeof window !== "undefined" && window.location.protocol === "file:") {
+    if (this.isStaticHostingWithoutApi()) {
       this.setSyncStatus("local_safe");
-      return false;
+      return true;
     }
 
     if (!navigator.onLine) {
@@ -206,8 +222,15 @@ class DataStore {
     try {
       if (!isBackground) this.setSyncStatus("syncing");
 
-      const res = await fetch("/api/bootstrap", { cache: "no-store" });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const res = await fetch(this.getApiUrl("/api/bootstrap"), { cache: "no-store" });
+      if (!res.ok) {
+        if (res.status === 404) {
+          // GitHub Pages 等の静的ホスティング環境でバックエンド未配置の場合はローカル安全保存
+          this.setSyncStatus("local_safe");
+          return true;
+        }
+        throw new Error(`HTTP ${res.status}`);
+      }
 
       const body = await res.json();
       if (!body.success) throw new Error(body.error || "Bootstrap failed");
@@ -281,7 +304,7 @@ class DataStore {
       }
       return true;
     } catch (err) {
-      if (!navigator.onLine) {
+      if (!navigator.onLine || err.message.includes("404") || err.message.includes("Failed to fetch")) {
         this.setSyncStatus("local_safe");
       } else {
         this.setSyncStatus("error", { error: err.message });
@@ -465,8 +488,7 @@ class DataStore {
 
   // 永続キューの一括フラッシュ処理（F5, F6, F7対応）
   async flushSyncQueue() {
-    if (typeof window !== "undefined" && window.location.protocol === "file:") {
-      this.syncQueue = [];
+    if (this.isStaticHostingWithoutApi()) {
       this.saveToStorage();
       this.setSyncStatus("local_safe");
       return false;
@@ -486,7 +508,7 @@ class DataStore {
 
     this._syncPromise = (async () => {
       try {
-        while (this.syncQueue.length > 0 && navigator.onLine) {
+        while (this.syncQueue.length > 0 && navigator.onLine && !this.isStaticHostingWithoutApi()) {
           const ok = await this._executeFlushBatch();
           if (!ok) return false;
         }
@@ -501,11 +523,11 @@ class DataStore {
 
   async _executeFlushBatch() {
     if (this.syncQueue.length === 0) {
-      this.setSyncStatus("synced");
+      this.setSyncStatus(this.isStaticHostingWithoutApi() ? "local_safe" : "synced");
       return true;
     }
 
-    if (!navigator.onLine) {
+    if (!navigator.onLine || this.isStaticHostingWithoutApi()) {
       this.setSyncStatus("local_safe");
       return false;
     }
@@ -529,34 +551,50 @@ class DataStore {
       // 1. スタッフ・アドバイザーのミューテーションを先に実行
       for (const mut of nonEvalMutations) {
         if (mut.type === "staff_save") {
-          const res = await fetch("/api/staff", {
+          const res = await fetch(this.getApiUrl("/api/staff"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(mut.data),
           });
+          if (res.status === 404) {
+            this.setSyncStatus("local_safe");
+            return false;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
         } else if (mut.type === "staff_delete") {
-          const res = await fetch(`/api/staff/${encodeURIComponent(mut.staffId)}`, {
+          const res = await fetch(this.getApiUrl(`/api/staff/${encodeURIComponent(mut.staffId)}`), {
             method: "DELETE",
           });
+          if (res.status === 404) {
+            this.setSyncStatus("local_safe");
+            return false;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
         } else if (mut.type === "advisor_save") {
-          const res = await fetch("/api/advisors", {
+          const res = await fetch(this.getApiUrl("/api/advisors"), {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(mut.data),
           });
+          if (res.status === 404) {
+            this.setSyncStatus("local_safe");
+            return false;
+          }
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
         }
       }
 
       // 2. 評価アイテムのバッチ送信
       if (evaluationItems.length > 0) {
-        const res = await fetch("/api/evaluations/sync", {
+        const res = await fetch(this.getApiUrl("/api/evaluations/sync"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ items: evaluationItems }),
         });
+        if (res.status === 404) {
+          this.setSyncStatus("local_safe");
+          return false;
+        }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
       }
 
@@ -572,13 +610,13 @@ class DataStore {
       this.backoffFailures++;
       this.backoffDelayMs = Math.min(30000, 2000 * Math.pow(2, this.backoffFailures - 1));
 
-      if (!navigator.onLine) {
+      if (!navigator.onLine || err.message.includes("404") || err.message.includes("Failed to fetch")) {
         this.setSyncStatus("local_safe");
       } else {
         this.setSyncStatus("error", { error: err.message, retryInMs: this.backoffDelayMs });
         if (this.backoffTimer) clearTimeout(this.backoffTimer);
         this.backoffTimer = setTimeout(() => {
-          if (navigator.onLine) this.flushSyncQueue();
+          if (navigator.onLine && !this.isStaticHostingWithoutApi()) this.flushSyncQueue();
         }, this.backoffDelayMs);
       }
       return false;
@@ -590,6 +628,11 @@ class DataStore {
     this.backoffFailures = 0;
     this.backoffDelayMs = 2000;
     if (this.backoffTimer) clearTimeout(this.backoffTimer);
+
+    if (this.isStaticHostingWithoutApi()) {
+      this.setSyncStatus("local_safe");
+      return true;
+    }
 
     this.setSyncStatus("syncing", { manual: true });
     const flushOk = await this.flushSyncQueue();
