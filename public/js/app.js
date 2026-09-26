@@ -186,6 +186,33 @@ document.addEventListener("DOMContentLoaded", () => {
           const ev = store.getEvaluation(staff.id, mid.id);
           const checkedCps = new Set(ev.checks_json || []);
 
+          // 中項目配下の全小項目ID（判定基準）を算出
+          const allItemCheckIds = [];
+          if (mid.checkpoints) {
+            mid.checkpoints.forEach((cp) => {
+              if (cp.sub_checks && cp.sub_checks.length > 0) {
+                cp.sub_checks.forEach((_, idx) => allItemCheckIds.push(`${cp.id}_sc_${idx}`));
+              } else {
+                allItemCheckIds.push(cp.id);
+              }
+            });
+          }
+
+          // 小項目の埋まり具合から 〇・× を自動判定する関数
+          function calcAutoCheckEval(checksSet) {
+            if (allItemCheckIds.length === 0) return "";
+            let checkedCount = 0;
+            allItemCheckIds.forEach((id) => {
+              if (checksSet.has(id)) checkedCount++;
+            });
+            if (checkedCount === 0) return ""; // 未チェック
+            if (checkedCount === allItemCheckIds.length) return "circle"; // 全て埋まったら〇
+            return "cross"; // 1つでも埋まらなければ×
+          }
+
+          // 現在の〇×状態（保存値またはチェックボックスから自動算出）
+          let currentAutoEval = ev.check_eval || calcAutoCheckEval(checkedCps);
+
           const card = document.createElement("div");
           card.className = "mid-item-card";
           card.id = `card-${mid.id}`;
@@ -195,38 +222,75 @@ document.addEventListener("DOMContentLoaded", () => {
           header.innerHTML = `
             <div class="mid-item-title">${escapeHtml(mid.title)}</div>
             <div class="eval-button-groups no-print">
-              <div class="eval-btn-group" title="チェック評価">
-                <button type="button" class="eval-btn ${ev.check_eval === "circle" ? "active" : ""}" data-val="circle">〇</button>
-                <button type="button" class="eval-btn ${ev.check_eval === "cross" ? "active" : ""}" data-val="cross">×</button>
+              <!-- 〇× 自動判定バッジ -->
+              <div class="auto-eval-container">
+                <span class="eval-group-label">チェック評価:</span>
+                <div class="auto-eval-badge ${currentAutoEval === "circle" ? "circle" : (currentAutoEval === "cross" ? "cross" : "")}" id="auto-badge-${mid.id}" title="小項目が埋まると自動判定（クリックで手動切替も可能）">
+                  <span class="auto-eval-icon">${currentAutoEval === "circle" ? "〇" : (currentAutoEval === "cross" ? "×" : "―")}</span>
+                  <span class="auto-eval-badge-sub">${currentAutoEval === "circle" ? "クリア" : (currentAutoEval === "cross" ? "未達あり" : "未判定")}</span>
+                </div>
               </div>
 
-              <div class="eval-btn-group" title="小項目評価">
-                <button type="button" class="eval-btn ${ev.score === "A" ? "active" : ""}" data-val="A">A</button>
-                <button type="button" class="eval-btn ${ev.score === "B" ? "active" : ""}" data-val="B">B</button>
-                <button type="button" class="eval-btn ${ev.score === "C" ? "active" : ""}" data-val="C">C</button>
-                <button type="button" class="eval-btn ${ev.score === "hyphen" ? "active" : ""}" data-val="hyphen">―</button>
+              <!-- A・B・C・― 小項目評価ボタン（内容ラベル付き） -->
+              <div class="score-eval-container">
+                <span class="eval-group-label">小項目評価:</span>
+                <div class="eval-btn-group">
+                  <button type="button" class="eval-btn ${ev.score === "A" ? "active" : ""}" data-val="A" title="できる">
+                    <span class="eval-btn-key">A</span>
+                    <span class="eval-btn-desc">できる</span>
+                  </button>
+                  <button type="button" class="eval-btn ${ev.score === "B" ? "active" : ""}" data-val="B" title="指導を要する">
+                    <span class="eval-btn-key">B</span>
+                    <span class="eval-btn-desc">指導要</span>
+                  </button>
+                  <button type="button" class="eval-btn ${ev.score === "C" ? "active" : ""}" data-val="C" title="できない">
+                    <span class="eval-btn-key">C</span>
+                    <span class="eval-btn-desc">できない</span>
+                  </button>
+                  <button type="button" class="eval-btn ${ev.score === "hyphen" ? "active" : ""}" data-val="hyphen" title="対象外">
+                    <span class="eval-btn-key">―</span>
+                    <span class="eval-btn-desc">対象外</span>
+                  </button>
+                </div>
               </div>
             </div>
           `;
 
+          // バッジUI更新ヘルパー
+          function updateBadgeUI(evalVal) {
+            const badge = header.querySelector(`#auto-badge-${mid.id}`);
+            if (!badge) return;
+            badge.className = `auto-eval-badge ${evalVal === "circle" ? "circle" : (evalVal === "cross" ? "cross" : "")}`;
+            badge.querySelector(".auto-eval-icon").textContent = evalVal === "circle" ? "〇" : (evalVal === "cross" ? "×" : "―");
+            badge.querySelector(".auto-eval-badge-sub").textContent = evalVal === "circle" ? "クリア" : (evalVal === "cross" ? "未達あり" : "未判定");
+          }
+
+          // バッジの手動クリック（必要時の手動オーバーライド対応）
+          const autoBadgeEl = header.querySelector(`#auto-badge-${mid.id}`);
+          autoBadgeEl.addEventListener("click", () => {
+            const currentEv = store.getEvaluation(staff.id, mid.id);
+            let nextVal = "";
+            if (!currentEv.check_eval || currentEv.check_eval === "cross") {
+              nextVal = "circle";
+            } else if (currentEv.check_eval === "circle") {
+              nextVal = "cross";
+            }
+            store.saveEvaluation(staff.id, mid.id, { check_eval: nextVal });
+            updateBadgeUI(nextVal);
+            updateProgressUI(staff.id);
+          });
+
+          // ABCボタンのクリックイベント
           header.querySelectorAll(".eval-btn").forEach((btn) => {
             btn.addEventListener("click", () => {
               const val = btn.dataset.val;
-              if (val === "circle" || val === "cross") {
-                const newVal = ev.check_eval === val ? "" : val;
-                store.saveEvaluation(staff.id, mid.id, { check_eval: newVal });
-              } else {
-                const newVal = ev.score === val ? "" : val;
-                store.saveEvaluation(staff.id, mid.id, { score: newVal });
-              }
+              const currentEv = store.getEvaluation(staff.id, mid.id);
+              const newVal = currentEv.score === val ? "" : val;
+              store.saveEvaluation(staff.id, mid.id, { score: newVal });
+
               const group = btn.closest(".eval-btn-group");
               group.querySelectorAll(".eval-btn").forEach((b) => b.classList.remove("active"));
-              const currentEv = store.getEvaluation(staff.id, mid.id);
-              if (val === "circle" || val === "cross") {
-                if (currentEv.check_eval) group.querySelector(`[data-val="${currentEv.check_eval}"]`)?.classList.add("active");
-              } else {
-                if (currentEv.score) group.querySelector(`[data-val="${currentEv.score}"]`)?.classList.add("active");
-              }
+              if (newVal) group.querySelector(`[data-val="${newVal}"]`)?.classList.add("active");
               updateProgressUI(staff.id);
             });
           });
@@ -247,7 +311,6 @@ document.addEventListener("DOMContentLoaded", () => {
               const hasSubChecks = cp.sub_checks && cp.sub_checks.length > 0;
               const subCheckIds = hasSubChecks ? cp.sub_checks.map((_, idx) => `${cp.id}_sc_${idx}`) : [];
 
-              // 全小項目がチェックされているか、または親IDが保存されているか
               const allSubsChecked = hasSubChecks && subCheckIds.every((scId) => checkedCps.has(scId));
               const isParentChecked = checkedCps.has(cp.id) || allSubsChecked;
 
@@ -262,8 +325,6 @@ document.addEventListener("DOMContentLoaded", () => {
               `;
 
               const parentCheckbox = cpRow.querySelector(".checkpoint-checkbox");
-
-              // 小項目（sub_checks）チェックボックスリスト
               let subCheckboxes = [];
               let subContainer = null;
 
@@ -273,7 +334,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 cp.sub_checks.forEach((sc, scIdx) => {
                   const scId = `${cp.id}_sc_${scIdx}`;
-                  // 親がチェック済みの場合は小項目もONとして扱う
                   const isScChecked = checkedCps.has(scId) || isParentChecked;
 
                   const scRow = document.createElement("label");
@@ -286,7 +346,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   const scCheckbox = scRow.querySelector(".subcheck-checkbox");
                   subCheckboxes.push({ id: scId, el: scCheckbox });
 
-                  // 小項目チェック変更イベント
+                  // 小項目チェック変更時：自動〇×判定連動
                   scCheckbox.addEventListener("change", () => {
                     const currentRecord = store.getEvaluation(staff.id, mid.id);
                     const currentSet = new Set(currentRecord.checks_json || []);
@@ -295,25 +355,31 @@ document.addEventListener("DOMContentLoaded", () => {
                       currentSet.add(scId);
                     } else {
                       currentSet.delete(scId);
-                      currentSet.delete(cp.id); // 小項目が1つでも外れたら親も外す
+                      currentSet.delete(cp.id);
                       parentCheckbox.checked = false;
                     }
 
-                    // 全小項目がチェックされたら親も自動チェック
                     const allNowChecked = subCheckIds.every((id) => currentSet.has(id));
                     if (allNowChecked) {
                       currentSet.add(cp.id);
                       parentCheckbox.checked = true;
                     }
 
-                    store.saveEvaluation(staff.id, mid.id, { checks_json: Array.from(currentSet) });
+                    // 埋まり具合から 〇・× を自動判定
+                    const autoResult = calcAutoCheckEval(currentSet);
+                    store.saveEvaluation(staff.id, mid.id, {
+                      checks_json: Array.from(currentSet),
+                      check_eval: autoResult,
+                    });
+                    updateBadgeUI(autoResult);
+                    updateProgressUI(staff.id);
                   });
 
                   subContainer.appendChild(scRow);
                 });
               }
 
-              // 親チェック変更イベント（配下の小項目と全連動）
+              // 親チェック変更時（配下の小項目と全連動 & 〇×自動判定）
               parentCheckbox.addEventListener("change", () => {
                 const currentRecord = store.getEvaluation(staff.id, mid.id);
                 const currentSet = new Set(currentRecord.checks_json || []);
@@ -332,7 +398,14 @@ document.addEventListener("DOMContentLoaded", () => {
                   });
                 }
 
-                store.saveEvaluation(staff.id, mid.id, { checks_json: Array.from(currentSet) });
+                // 埋まり具合から 〇・× を自動判定
+                const autoResult = calcAutoCheckEval(currentSet);
+                store.saveEvaluation(staff.id, mid.id, {
+                  checks_json: Array.from(currentSet),
+                  check_eval: autoResult,
+                });
+                updateBadgeUI(autoResult);
+                updateProgressUI(staff.id);
               });
 
               cpGroup.appendChild(cpRow);

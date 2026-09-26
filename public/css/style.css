@@ -431,12 +431,67 @@ body {
   min-width: 250px;
 }
 
-/* 評価ボタングループ（大型タッチターゲット） */
 .eval-button-groups {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   align-items: center;
   flex-wrap: wrap;
+}
+
+/* 〇× 自動判定バッジ */
+.auto-eval-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.eval-group-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--da-text-muted);
+}
+
+.auto-eval-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.95rem;
+  font-weight: 800;
+  border: 2px solid var(--da-border);
+  background-color: #ffffff;
+  color: var(--da-text-muted);
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+  min-height: 44px;
+}
+
+.auto-eval-badge.circle {
+  background-color: #e6f4ea;
+  border-color: #137333;
+  color: #137333;
+  box-shadow: 0 1px 3px rgba(19, 115, 51, 0.15);
+}
+
+.auto-eval-badge.cross {
+  background-color: #fce8e6;
+  border-color: #c5221f;
+  color: #c5221f;
+  box-shadow: 0 1px 3px rgba(197, 34, 31, 0.15);
+}
+
+.auto-eval-badge-sub {
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+/* A・B・C・― ボタングループ（内容が分かるラベル付き） */
+.score-eval-container {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .eval-btn-group {
@@ -448,20 +503,20 @@ body {
 }
 
 .eval-btn {
-  min-width: 48px;
+  min-width: 58px;
   height: 44px;
   border: none;
   background-color: #ffffff;
   color: var(--da-text);
-  font-size: 1rem;
-  font-weight: 700;
   cursor: pointer;
   transition: all 0.15s ease;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 0 0.6rem;
+  padding: 0 0.5rem;
   border-right: 1px solid var(--da-border);
+  line-height: 1.2;
 }
 
 .eval-btn:last-child {
@@ -472,20 +527,24 @@ body {
   background-color: #f1f5f9;
 }
 
-/* 〇・×ボタンのアクティブ色 */
-.eval-btn[data-val="circle"].active {
-  background-color: var(--da-success);
+.eval-btn-key {
+  font-size: 1rem;
+  font-weight: 800;
+}
+
+.eval-btn-desc {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--da-text-muted);
+}
+
+.eval-btn.active .eval-btn-desc {
   color: #ffffff;
 }
 
-.eval-btn[data-val="cross"].active {
-  background-color: var(--da-danger);
-  color: #ffffff;
-}
-
-/* A・B・C・―ボタンのアクティブ色 */
+/* アクティブカラー */
 .eval-btn[data-val="A"].active {
-  background-color: #2563eb;
+  background-color: #1d4ed8;
   color: #ffffff;
 }
 
@@ -500,7 +559,7 @@ body {
 }
 
 .eval-btn[data-val="hyphen"].active {
-  background-color: #64748b;
+  background-color: #475569;
   color: #ffffff;
 }
 
