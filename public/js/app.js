@@ -222,15 +222,6 @@ document.addEventListener("DOMContentLoaded", () => {
           header.innerHTML = `
             <div class="mid-item-title">${escapeHtml(mid.title)}</div>
             <div class="eval-button-groups no-print">
-              <!-- 〇× 自動判定バッジ -->
-              <div class="auto-eval-container">
-                <span class="eval-group-label">チェック評価:</span>
-                <div class="auto-eval-badge ${currentAutoEval === "circle" ? "circle" : (currentAutoEval === "cross" ? "cross" : "")}" id="auto-badge-${mid.id}" title="小項目が埋まると自動判定（クリックで手動切替も可能）">
-                  <span class="auto-eval-icon">${currentAutoEval === "circle" ? "〇" : (currentAutoEval === "cross" ? "×" : "―")}</span>
-                  <span class="auto-eval-badge-sub">${currentAutoEval === "circle" ? "クリア" : (currentAutoEval === "cross" ? "未達あり" : "未判定")}</span>
-                </div>
-              </div>
-
               <!-- A・B・C・― 小項目評価ボタン（内容ラベル付き） -->
               <div class="score-eval-container">
                 <span class="eval-group-label">小項目評価:</span>
@@ -255,30 +246,6 @@ document.addEventListener("DOMContentLoaded", () => {
               </div>
             </div>
           `;
-
-          // バッジUI更新ヘルパー
-          function updateBadgeUI(evalVal) {
-            const badge = header.querySelector(`#auto-badge-${mid.id}`);
-            if (!badge) return;
-            badge.className = `auto-eval-badge ${evalVal === "circle" ? "circle" : (evalVal === "cross" ? "cross" : "")}`;
-            badge.querySelector(".auto-eval-icon").textContent = evalVal === "circle" ? "〇" : (evalVal === "cross" ? "×" : "―");
-            badge.querySelector(".auto-eval-badge-sub").textContent = evalVal === "circle" ? "クリア" : (evalVal === "cross" ? "未達あり" : "未判定");
-          }
-
-          // バッジの手動クリック（必要時の手動オーバーライド対応）
-          const autoBadgeEl = header.querySelector(`#auto-badge-${mid.id}`);
-          autoBadgeEl.addEventListener("click", () => {
-            const currentEv = store.getEvaluation(staff.id, mid.id);
-            let nextVal = "";
-            if (!currentEv.check_eval || currentEv.check_eval === "cross") {
-              nextVal = "circle";
-            } else if (currentEv.check_eval === "circle") {
-              nextVal = "cross";
-            }
-            store.saveEvaluation(staff.id, mid.id, { check_eval: nextVal });
-            updateBadgeUI(nextVal);
-            updateProgressUI(staff.id);
-          });
 
           // ABCボタンのクリックイベント
           header.querySelectorAll(".eval-btn").forEach((btn) => {
@@ -311,20 +278,53 @@ document.addEventListener("DOMContentLoaded", () => {
               const hasSubChecks = cp.sub_checks && cp.sub_checks.length > 0;
               const subCheckIds = hasSubChecks ? cp.sub_checks.map((_, idx) => `${cp.id}_sc_${idx}`) : [];
 
-              const allSubsChecked = hasSubChecks && subCheckIds.every((scId) => checkedCps.has(scId));
-              const isParentChecked = checkedCps.has(cp.id) || allSubsChecked;
+              // 各点検項目（①、②など）のステータス（circle: 〇, cross: ×, empty: 空）を判定する関数
+              function getCpStatus(checksSet) {
+                if (hasSubChecks) {
+                  let checkedCount = 0;
+                  subCheckIds.forEach((id) => {
+                    if (checksSet.has(id)) checkedCount++;
+                  });
+                  if (checkedCount === 0) return "empty";
+                  if (checkedCount === subCheckIds.length) return "circle";
+                  return "cross";
+                } else {
+                  return checksSet.has(cp.id) ? "circle" : "empty";
+                }
+              }
 
-              // 親の点検項目行
-              const cpRow = document.createElement("label");
+              // 親の点検項目行（左側のチェックボックス枠内に 〇 / × / 空 を表示）
+              const cpRow = document.createElement("div");
               cpRow.className = "checkpoint-row";
               cpRow.innerHTML = `
-                <input type="checkbox" class="checkpoint-checkbox" ${isParentChecked ? "checked" : ""} data-cp-id="${cp.id}">
+                <button type="button" class="checkpoint-status-box" aria-label="点検項目 ${escapeHtml(cp.num)} 判定切替">
+                  <span class="status-icon"></span>
+                </button>
                 <div class="checkpoint-body">
                   <div class="checkpoint-main"><strong>${escapeHtml(cp.num)}</strong> ${escapeHtml(cp.text)}</div>
                 </div>
               `;
 
-              const parentCheckbox = cpRow.querySelector(".checkpoint-checkbox");
+              const statusBox = cpRow.querySelector(".checkpoint-status-box");
+              const statusIcon = cpRow.querySelector(".status-icon");
+
+              function updateCpStatusUI(status) {
+                statusBox.className = `checkpoint-status-box status-${status}`;
+                if (status === "circle") {
+                  statusIcon.textContent = "〇";
+                  statusBox.title = "クリア（全小項目達成） - クリックで全解除";
+                } else if (status === "cross") {
+                  statusIcon.textContent = "×";
+                  statusBox.title = "未達あり（小項目に未チェックあり） - クリックで全チェック";
+                } else {
+                  statusIcon.textContent = "";
+                  statusBox.title = "未着手 - クリックで全チェック";
+                }
+              }
+
+              // 初期状態の反映
+              updateCpStatusUI(getCpStatus(checkedCps));
+
               let subCheckboxes = [];
               let subContainer = null;
 
@@ -332,9 +332,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 subContainer = document.createElement("div");
                 subContainer.className = "checkpoint-subchecks";
 
+                const isParentFullyChecked = getCpStatus(checkedCps) === "circle";
+
                 cp.sub_checks.forEach((sc, scIdx) => {
                   const scId = `${cp.id}_sc_${scIdx}`;
-                  const isScChecked = checkedCps.has(scId) || isParentChecked;
+                  const isScChecked = checkedCps.has(scId) || isParentFullyChecked;
 
                   const scRow = document.createElement("label");
                   scRow.className = "subcheck-row";
@@ -346,7 +348,7 @@ document.addEventListener("DOMContentLoaded", () => {
                   const scCheckbox = scRow.querySelector(".subcheck-checkbox");
                   subCheckboxes.push({ id: scId, el: scCheckbox });
 
-                  // 小項目チェック変更時：自動〇×判定連動
+                  // 小項目チェック変更時：①②の左側ボックス（〇/×/空）と自動判定連動
                   scCheckbox.addEventListener("change", () => {
                     const currentRecord = store.getEvaluation(staff.id, mid.id);
                     const currentSet = new Set(currentRecord.checks_json || []);
@@ -355,23 +357,25 @@ document.addEventListener("DOMContentLoaded", () => {
                       currentSet.add(scId);
                     } else {
                       currentSet.delete(scId);
-                      currentSet.delete(cp.id);
-                      parentCheckbox.checked = false;
                     }
 
                     const allNowChecked = subCheckIds.every((id) => currentSet.has(id));
                     if (allNowChecked) {
                       currentSet.add(cp.id);
-                      parentCheckbox.checked = true;
+                    } else {
+                      currentSet.delete(cp.id);
                     }
 
-                    // 埋まり具合から 〇・× を自動判定
+                    // ①②の左側ボックスの 〇 / × / 空 をリアルタイム更新！
+                    const newStatus = getCpStatus(currentSet);
+                    updateCpStatusUI(newStatus);
+
+                    // 中項目全体の自動〇×判定連動
                     const autoResult = calcAutoCheckEval(currentSet);
                     store.saveEvaluation(staff.id, mid.id, {
                       checks_json: Array.from(currentSet),
                       check_eval: autoResult,
                     });
-                    updateBadgeUI(autoResult);
                     updateProgressUI(staff.id);
                   });
 
@@ -379,33 +383,48 @@ document.addEventListener("DOMContentLoaded", () => {
                 });
               }
 
-              // 親チェック変更時（配下の小項目と全連動 & 〇×自動判定）
-              parentCheckbox.addEventListener("change", () => {
+              // 親ボックスまたはテキストのクリック時：一括トグル（〇 ⇔ 解除）
+              function toggleCheckpoint() {
                 const currentRecord = store.getEvaluation(staff.id, mid.id);
                 const currentSet = new Set(currentRecord.checks_json || []);
+                const currentStatus = getCpStatus(currentSet);
 
-                if (parentCheckbox.checked) {
-                  currentSet.add(cp.id);
-                  subCheckboxes.forEach((sc) => {
-                    sc.el.checked = true;
-                    currentSet.add(sc.id);
-                  });
-                } else {
+                if (currentStatus === "circle") {
+                  // 現在クリア（〇）なら全解除
+                  if (hasSubChecks) {
+                    subCheckIds.forEach((id) => currentSet.delete(id));
+                    subCheckboxes.forEach((sc) => (sc.el.checked = false));
+                  }
                   currentSet.delete(cp.id);
-                  subCheckboxes.forEach((sc) => {
-                    sc.el.checked = false;
-                    currentSet.delete(sc.id);
-                  });
+                } else {
+                  // 未達（×）または空なら全チェック（〇へ）
+                  if (hasSubChecks) {
+                    subCheckIds.forEach((id) => currentSet.add(id));
+                    subCheckboxes.forEach((sc) => (sc.el.checked = true));
+                  }
+                  currentSet.add(cp.id);
                 }
 
-                // 埋まり具合から 〇・× を自動判定
+                // ①②の左側ボックスの 〇 / × / 空 をリアルタイム更新！
+                const newStatus = getCpStatus(currentSet);
+                updateCpStatusUI(newStatus);
+
+                // 中項目全体の自動〇×判定連動
                 const autoResult = calcAutoCheckEval(currentSet);
                 store.saveEvaluation(staff.id, mid.id, {
                   checks_json: Array.from(currentSet),
                   check_eval: autoResult,
                 });
-                updateBadgeUI(autoResult);
                 updateProgressUI(staff.id);
+              }
+
+              statusBox.addEventListener("click", (e) => {
+                e.stopPropagation();
+                toggleCheckpoint();
+              });
+
+              cpRow.querySelector(".checkpoint-main").addEventListener("click", () => {
+                toggleCheckpoint();
               });
 
               cpGroup.appendChild(cpRow);
