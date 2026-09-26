@@ -99,7 +99,12 @@ document.addEventListener("DOMContentLoaded", () => {
       card.innerHTML = `
         <div class="staff-card-header">
           <span class="staff-name">${escapeHtml(staff.name)}</span>
-          <span class="role-badge general">介護スタッフ</span>
+          <div class="staff-card-actions">
+            <span class="role-badge general">介護スタッフ</span>
+            <button type="button" class="btn-card-delete" title="「${escapeHtml(staff.name)}」を削除" aria-label="スタッフ「${escapeHtml(staff.name)}」を削除">
+              🗑️
+            </button>
+          </div>
         </div>
         <div class="progress-container">
           <div class="progress-bar-fill" style="width: ${prog.percent}%"></div>
@@ -110,6 +115,13 @@ document.addEventListener("DOMContentLoaded", () => {
         </div>
       `;
 
+      // スタッフカード内のゴミ箱削除ボタン
+      const deleteBtn = card.querySelector(".btn-card-delete");
+      deleteBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        confirmDeleteStaff(staff);
+      });
+
       card.addEventListener("click", () => {
         currentStaffId = staff.id;
         renderStaffList();
@@ -118,6 +130,24 @@ document.addEventListener("DOMContentLoaded", () => {
 
       staffListContainer.appendChild(card);
     });
+  }
+
+  // スタッフ削除確認＆実行（カード・固定ヘッダー・モーダル共通）
+  function confirmDeleteStaff(staff) {
+    if (!staff) return;
+    const ok = confirm(`【スタッフ削除の確認】\n\n本当に「${staff.name}」の登録を削除しますか？\n※このスタッフの入力済みテクニカルシート評価データも完全に削除されます。`);
+    if (!ok) return;
+
+    store.deleteStaff(staff.id);
+
+    // 削除後のスタッフ選択を更新
+    const remaining = store.getStaffByFloor(currentFloor).filter((s) => s.id !== staff.id);
+    currentStaffId = remaining.length > 0 ? remaining[0].id : null;
+
+    closeStaffModal();
+    renderFloorTabs();
+    renderStaffList();
+    renderEvaluationSheet();
   }
 
   // ----------------------------------------------------
@@ -149,12 +179,14 @@ document.addEventListener("DOMContentLoaded", () => {
         <span class="target-meta">進捗率: <strong>${prog.percent}%</strong> (${prog.completed}/${prog.total} 項目)</span>
       </div>
       <div class="target-actions no-print">
-        <button class="btn btn-outline btn-sm" id="btn-edit-staff">スタッフ名変更</button>
+        <button class="btn btn-outline btn-sm" id="btn-edit-staff">✏️ 氏名変更</button>
+        <button class="btn btn-outline btn-sm btn-danger-outline" id="btn-delete-staff-banner">🗑️ 削除</button>
         <button class="btn btn-primary btn-sm" id="btn-print-sheet">🖨️ A4印刷 / PDF</button>
       </div>
     `;
 
     document.getElementById("btn-edit-staff")?.addEventListener("click", () => openStaffModal(staff));
+    document.getElementById("btn-delete-staff-banner")?.addEventListener("click", () => confirmDeleteStaff(staff));
     document.getElementById("btn-print-sheet")?.addEventListener("click", () => window.print());
 
     // 大項目・中項目の描画
@@ -484,7 +516,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // ----------------------------------------------------
   function openStaffModal(staff = null) {
     staffForm.reset();
-    document.getElementById("staff-modal-title").textContent = staff ? "スタッフ情報編集" : "新規スタッフ追加";
+    document.getElementById("staff-modal-title").textContent = staff ? "スタッフ情報の変更・削除" : "新規スタッフ追加";
     document.getElementById("staff-id").value = staff ? staff.id : `staff_${currentFloor.toLowerCase()}_${Date.now()}`;
     document.getElementById("staff-floor").value = staff ? staff.floor : currentFloor;
     document.getElementById("staff-name").value = staff ? staff.name : "";
@@ -492,11 +524,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const deleteBtn = document.getElementById("btn-delete-staff");
     if (deleteBtn) {
       deleteBtn.style.display = staff ? "inline-flex" : "none";
+      deleteBtn.textContent = "🗑️ このスタッフを削除";
       deleteBtn.onclick = () => {
-        if (confirm(`本当に「${staff.name}」の登録および評価データを削除しますか？`)) {
-          store.deleteStaff(staff.id);
-          closeStaffModal();
-        }
+        confirmDeleteStaff(staff);
       };
     }
 

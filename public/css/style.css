@@ -288,6 +288,46 @@ body {
   color: #475569;
 }
 
+.staff-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.btn-card-delete {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  font-size: 0.95rem;
+  padding: 0.2rem 0.45rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-card-delete:hover {
+  background-color: #fee2e2;
+  border-color: #fca5a5;
+  color: #dc2626;
+  transform: scale(1.1);
+}
+
+.btn-danger-outline {
+  color: var(--da-danger);
+  border-color: var(--da-danger);
+  background-color: transparent;
+}
+
+.btn-danger-outline:hover {
+  background-color: #dc2626;
+  color: #ffffff;
+  border-color: #dc2626;
+}
+
 .progress-container {
   width: 100%;
   background-color: #e5e7eb;
