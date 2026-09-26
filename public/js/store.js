@@ -3,11 +3,12 @@
  * - LocalStorage即時永続化（オフライン二重防壁）
  * - Cloudflare D1 クラウドAPI即時同期
  * - 定期ポーリングによる他端末更新のリアルタイム反映
+ * ※評価対象は一般介護スタッフ専用（リーダー評価なし）
  */
 
 class DataStore {
   constructor() {
-    this.STORAGE_KEY = "TECHNICAL_SHEET_DATA_V1";
+    this.STORAGE_KEY = "TECHNICAL_SHEET_DATA_V2"; // V2に更新して介護スタッフ専用データをクリーンに初期化
     this.data = {
       staff: [],
       advisors: {
@@ -55,7 +56,16 @@ class DataStore {
       const raw = localStorage.getItem(this.STORAGE_KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        if (parsed.staff) this.data.staff = parsed.staff;
+        if (parsed.staff && parsed.staff.length > 0) {
+          // リーダー表記があれば介護スタッフにノーマライズ
+          this.data.staff = parsed.staff.map((s) => ({
+            ...s,
+            name: s.name.replace(/リーダー/g, "介護スタッフ"),
+            role: "general",
+          }));
+        } else {
+          this.initDefaultData();
+        }
         if (parsed.advisors) this.data.advisors = { ...this.data.advisors, ...parsed.advisors };
         if (parsed.evaluations) this.data.evaluations = parsed.evaluations;
         if (parsed.lastSyncedAt) this.data.lastSyncedAt = parsed.lastSyncedAt;
@@ -69,17 +79,17 @@ class DataStore {
     }
   }
 
-  // 初回デフォルトサンプルデータ
+  // 初回デフォルトサンプルデータ（一般介護スタッフのみ）
   initDefaultData() {
     this.data.staff = [
       { id: "staff_2f_01", floor: "2F", name: "介護スタッフ A (2F)", role: "general", order_num: 1 },
-      { id: "staff_2f_02", floor: "2F", name: "サブリーダー B (2F)", role: "s_class", order_num: 2 },
+      { id: "staff_2f_02", floor: "2F", name: "介護スタッフ B (2F)", role: "general", order_num: 2 },
       { id: "staff_3f_01", floor: "3F", name: "介護スタッフ C (3F)", role: "general", order_num: 1 },
-      { id: "staff_3f_02", floor: "3F", name: "リーダー D (3F)", role: "s_class", order_num: 2 },
+      { id: "staff_3f_02", floor: "3F", name: "介護スタッフ D (3F)", role: "general", order_num: 2 },
       { id: "staff_4f_01", floor: "4F", name: "介護スタッフ E (4F)", role: "general", order_num: 1 },
-      { id: "staff_4f_02", floor: "4F", name: "リーダー F (4F)", role: "s_class", order_num: 2 },
+      { id: "staff_4f_02", floor: "4F", name: "介護スタッフ F (4F)", role: "general", order_num: 2 },
       { id: "staff_5f_01", floor: "5F", name: "介護スタッフ G (5F)", role: "general", order_num: 1 },
-      { id: "staff_5f_02", floor: "5F", name: "リーダー H (5F)", role: "s_class", order_num: 2 },
+      { id: "staff_5f_02", floor: "5F", name: "介護スタッフ H (5F)", role: "general", order_num: 2 },
     ];
     this.saveToLocal();
   }
@@ -95,10 +105,8 @@ class DataStore {
 
   // 起動時のクラウド同期 & 定期ポーリング開始
   async startRealtimeSync() {
-    // 初回ブートストラップ
     await this.fetchBootstrap();
 
-    // 5秒おきにサーバー更新を確認（PC側へのリアルタイム反映用）
     if (!this.pollInterval) {
       this.pollInterval = setInterval(() => {
         this.fetchBootstrap(true);
@@ -106,7 +114,7 @@ class DataStore {
     }
   }
 
-  // クラウドから全データ取得 & ローカルとの賢いマージ
+  // クラウドから全データ取得 & ローカルとのマージ
   async fetchBootstrap(isBackground = false) {
     try {
       if (!isBackground) this.setSyncStatus("syncing");
@@ -116,19 +124,20 @@ class DataStore {
       const result = await res.json();
       if (!result.success) throw new Error(result.error || "Sync failed");
 
-      // 1. スタッフマスター反映
       if (result.staff && result.staff.length > 0) {
-        this.data.staff = result.staff;
+        this.data.staff = result.staff.map((s) => ({
+          ...s,
+          name: s.name.replace(/リーダー/g, "介護スタッフ"),
+          role: "general",
+        }));
       }
 
-      // 2. アドバイザー名反映
       if (result.advisors) {
         result.advisors.forEach((adv) => {
           this.data.advisors[adv.floor] = adv.advisor_name;
         });
       }
 
-      // 3. 評価データマージ（更新日時が新しい方を優先）
       let hasUpdate = false;
       if (result.evaluations) {
         result.evaluations.forEach((remoteEval) => {
@@ -160,12 +169,10 @@ class DataStore {
         this.notify("data_updated");
       }
     } catch (err) {
-      // クラウドがまだデプロイされていないローカル環境などの場合はオフラインとしてLocalStorageで完結
       this.setSyncStatus("offline");
     }
   }
 
-  // スタッフ取得
   getStaffByFloor(floor) {
     return this.data.staff.filter((s) => s.floor === floor);
   }
@@ -174,33 +181,30 @@ class DataStore {
     return this.data.staff.find((s) => s.id === staffId);
   }
 
-  // スタッフ追加・更新
   async saveStaff(staffMember) {
-    const existingIndex = this.data.staff.findIndex((s) => s.id === staffMember.id);
+    const cleanStaff = { ...staffMember, role: "general" };
+    const existingIndex = this.data.staff.findIndex((s) => s.id === cleanStaff.id);
     if (existingIndex >= 0) {
-      this.data.staff[existingIndex] = { ...this.data.staff[existingIndex], ...staffMember };
+      this.data.staff[existingIndex] = { ...this.data.staff[existingIndex], ...cleanStaff };
     } else {
-      this.data.staff.push(staffMember);
+      this.data.staff.push(cleanStaff);
     }
     this.saveToLocal();
     this.notify("staff_changed");
 
-    // クラウド同期
     try {
       await fetch("/api/staff", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(staffMember),
+        body: JSON.stringify(cleanStaff),
       });
     } catch (e) {
       console.warn("Cloud sync failed for staff, saved locally");
     }
   }
 
-  // スタッフ削除
   async deleteStaff(staffId) {
     this.data.staff = this.data.staff.filter((s) => s.id !== staffId);
-    // 関連評価データも削除
     Object.keys(this.data.evaluations).forEach((k) => {
       if (k.startsWith(`${staffId}_`)) delete this.data.evaluations[k];
     });
@@ -214,7 +218,6 @@ class DataStore {
     }
   }
 
-  // アドバイザー名更新
   async setAdvisorName(floor, name) {
     this.data.advisors[floor] = name;
     this.saveToLocal();
@@ -235,7 +238,6 @@ class DataStore {
     return this.data.advisors[floor] || `${floor}担当アドバイザー`;
   }
 
-  // 評価データ取得
   getEvaluation(staffId, itemId) {
     const key = `${staffId}_${itemId}`;
     return (
@@ -253,7 +255,6 @@ class DataStore {
     );
   }
 
-  // 評価データ更新（スマホ/iPadからの即時保存）
   saveEvaluation(staffId, itemId, updates) {
     const key = `${staffId}_${itemId}`;
     const current = this.getEvaluation(staffId, itemId);
@@ -271,18 +272,14 @@ class DataStore {
     this.saveToLocal();
     this.notify("eval_updated", { staffId, itemId, record: updated });
 
-    // 即時キューイング & クラウド同期
     this.queueSync(updated);
   }
 
-  // クラウド同期キュー
   queueSync(evalRecord) {
-    // 重複除去
     this.syncQueue = this.syncQueue.filter(
       (item) => !(item.staff_id === evalRecord.staff_id && item.item_id === evalRecord.item_id)
     );
     this.syncQueue.push(evalRecord);
-
     this.triggerSyncDebounced();
   }
 
@@ -290,7 +287,7 @@ class DataStore {
     if (this.syncTimeout) clearTimeout(this.syncTimeout);
     this.syncTimeout = setTimeout(() => {
       this.flushSyncQueue();
-    }, 400); // 400ms デバウンスでバッチ送信
+    }, 400);
   }
 
   async flushSyncQueue() {
@@ -311,7 +308,6 @@ class DataStore {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       this.setSyncStatus("synced");
     } catch (err) {
-      // 失敗した場合はキューに戻す
       this.syncQueue = [...batch, ...this.syncQueue];
       this.setSyncStatus("offline");
     } finally {
@@ -322,24 +318,18 @@ class DataStore {
     }
   }
 
-  // スタッフの進捗率計算
+  // スタッフ進捗率計算（全21中項目ベース）
   calcStaffProgress(staffId) {
-    if (!window.TECHNICAL_SHEET_MASTER) return { completed: 0, total: 25, percent: 0 };
-    const staff = this.getStaffById(staffId);
-    const isSClass = staff && staff.role === "s_class";
+    if (!window.TECHNICAL_SHEET_MASTER) return { completed: 0, total: 21, percent: 0 };
 
     let total = 0;
     let completed = 0;
 
     window.TECHNICAL_SHEET_MASTER.forEach((cat) => {
-      // Sクラス限定項目の判定（Ⅲ. 指導育成）
-      if (cat.id === "cat_3" && !isSClass) return;
-
       cat.subcategories.forEach((sub) => {
         sub.mid_items.forEach((mid) => {
           total++;
           const ev = this.getEvaluation(staffId, mid.id);
-          // 〇×または小項目(A/B/C/―)のどちらかが入っていれば評価完了とみなす
           if (ev && (ev.check_eval || ev.score)) {
             completed++;
           }
@@ -351,7 +341,6 @@ class DataStore {
     return { completed, total, percent };
   }
 
-  // フロア全体の進捗計算
   calcFloorProgress(floor) {
     const staffList = this.getStaffByFloor(floor);
     if (staffList.length === 0) return { completed: 0, total: 0, percent: 0 };

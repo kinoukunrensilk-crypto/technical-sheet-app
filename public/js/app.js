@@ -1,6 +1,7 @@
 /**
  * テクニカルシート評価システム: アプリケーションUI制御
  * デジタル庁デザインシステム準拠 & モバイル/iPad/PCレスポンシブ
+ * ※評価対象は一般介護スタッフ専用（リーダー評価なし）
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -68,7 +69,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ----------------------------------------------------
-  // 3. スタッフリストの描画
+  // 3. スタッフリストの描画（介護スタッフ専用）
   // ----------------------------------------------------
   function renderStaffList() {
     staffListContainer.innerHTML = "";
@@ -85,7 +86,6 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // 初回に選択スタッフが未設定または別フロアの場合、先頭スタッフを選択
     if (!currentStaffId || !staffMembers.find((s) => s.id === currentStaffId)) {
       currentStaffId = staffMembers[0].id;
     }
@@ -99,7 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
       card.innerHTML = `
         <div class="staff-card-header">
           <span class="staff-name">${escapeHtml(staff.name)}</span>
-          <span class="role-badge ${staff.role}">${staff.role === "s_class" ? "Sクラス" : "一般"}</span>
+          <span class="role-badge general">介護スタッフ</span>
         </div>
         <div class="progress-container">
           <div class="progress-bar-fill" style="width: ${prog.percent}%"></div>
@@ -121,7 +121,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
 
   // ----------------------------------------------------
-  // 4. 評価シートの描画
+  // 4. 評価シートの描画（全21中項目）
   // ----------------------------------------------------
   function renderEvaluationSheet() {
     const staff = store.getStaffById(currentStaffId);
@@ -145,12 +145,11 @@ document.addEventListener("DOMContentLoaded", () => {
       <div class="target-info">
         <span class="target-floor-badge">${escapeHtml(staff.floor)}</span>
         <span class="target-name">${escapeHtml(staff.name)}</span>
-        <span class="role-badge ${staff.role}">${staff.role === "s_class" ? "Sクラス (全項目対象)" : "一般スタッフ"}</span>
         <span class="target-meta">担当アドバイザー: <strong>${escapeHtml(advName)}</strong></span>
-        <span class="target-meta">進捗率: <strong>${prog.percent}%</strong> (${prog.completed}/${prog.total})</span>
+        <span class="target-meta">進捗率: <strong>${prog.percent}%</strong> (${prog.completed}/${prog.total} 項目)</span>
       </div>
       <div class="target-actions no-print">
-        <button class="btn btn-outline btn-sm" id="btn-edit-staff">スタッフ情報編集</button>
+        <button class="btn btn-outline btn-sm" id="btn-edit-staff">スタッフ名変更</button>
         <button class="btn btn-primary btn-sm" id="btn-print-sheet">🖨️ A4印刷 / PDF</button>
       </div>
     `;
@@ -161,12 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // 大項目・中項目の描画
     evalAreaContainer.innerHTML = "";
 
-    master.forEach((cat, catIdx) => {
-      // Sクラス限定項目の判定（Ⅲ. 指導育成）
-      if (cat.id === "cat_3" && staff.role !== "s_class") {
-        return; // 一般スタッフには表示しない
-      }
-
+    master.forEach((cat) => {
       const catBlock = document.createElement("div");
       catBlock.className = "category-block";
 
@@ -181,7 +175,6 @@ document.addEventListener("DOMContentLoaded", () => {
       catBody.className = "category-body";
 
       cat.subcategories.forEach((subcat) => {
-        // サブカテゴリータイトル（入浴介助、食事介助など）
         if (subcat.title && subcat.title !== cat.title) {
           const subTitle = document.createElement("div");
           subTitle.className = "subcat-title";
@@ -189,7 +182,6 @@ document.addEventListener("DOMContentLoaded", () => {
           catBody.appendChild(subTitle);
         }
 
-        // 中項目リスト
         subcat.mid_items.forEach((mid) => {
           const ev = store.getEvaluation(staff.id, mid.id);
           const checkedCps = new Set(ev.checks_json || []);
@@ -198,19 +190,16 @@ document.addEventListener("DOMContentLoaded", () => {
           card.className = "mid-item-card";
           card.id = `card-${mid.id}`;
 
-          // カード上部: タイトル & 評価ボタングループ
           const header = document.createElement("div");
           header.className = "mid-item-header";
           header.innerHTML = `
             <div class="mid-item-title">${escapeHtml(mid.title)}</div>
             <div class="eval-button-groups no-print">
-              <!-- 〇・×評価ボタン -->
               <div class="eval-btn-group" title="チェック評価">
                 <button type="button" class="eval-btn ${ev.check_eval === "circle" ? "active" : ""}" data-val="circle">〇</button>
                 <button type="button" class="eval-btn ${ev.check_eval === "cross" ? "active" : ""}" data-val="cross">×</button>
               </div>
 
-              <!-- A・B・C・―小項目ボタン -->
               <div class="eval-btn-group" title="小項目評価">
                 <button type="button" class="eval-btn ${ev.score === "A" ? "active" : ""}" data-val="A">A</button>
                 <button type="button" class="eval-btn ${ev.score === "B" ? "active" : ""}" data-val="B">B</button>
@@ -220,18 +209,16 @@ document.addEventListener("DOMContentLoaded", () => {
             </div>
           `;
 
-          // ボタンクリックイベント設定
           header.querySelectorAll(".eval-btn").forEach((btn) => {
             btn.addEventListener("click", () => {
               const val = btn.dataset.val;
               if (val === "circle" || val === "cross") {
-                const newVal = ev.check_eval === val ? "" : val; // トグル解除対応
+                const newVal = ev.check_eval === val ? "" : val;
                 store.saveEvaluation(staff.id, mid.id, { check_eval: newVal });
               } else {
                 const newVal = ev.score === val ? "" : val;
                 store.saveEvaluation(staff.id, mid.id, { score: newVal });
               }
-              // ボタンのactive表示切り替え
               const group = btn.closest(".eval-btn-group");
               group.querySelectorAll(".eval-btn").forEach((b) => b.classList.remove("active"));
               const currentEv = store.getEvaluation(staff.id, mid.id);
@@ -246,7 +233,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
           card.appendChild(header);
 
-          // 点検項目（根拠チェックボックス）
           if (mid.checkpoints && mid.checkpoints.length > 0) {
             const cpContainer = document.createElement("div");
             cpContainer.className = "checkpoints-list";
@@ -287,7 +273,6 @@ document.addEventListener("DOMContentLoaded", () => {
             card.appendChild(cpContainer);
           }
 
-          // 自由記載欄
           const memoBox = document.createElement("div");
           memoBox.className = "memo-box";
           memoBox.innerHTML = `
@@ -308,7 +293,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
       });
 
-      // アコーディオン開閉
       catHeader.addEventListener("click", () => {
         const isCollapsed = catBody.style.display === "none";
         catBody.style.display = isCollapsed ? "block" : "none";
@@ -321,23 +305,15 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 
-  // 進捗状況のUI部分更新（全再描画せずにサクサク更新）
   function updateProgressUI(staffId) {
     const prog = store.calcStaffProgress(staffId);
-    const staffMembers = store.getStaffByFloor(currentFloor);
-    const staff = staffMembers.find((s) => s.id === staffId);
-    if (!staff) return;
-
-    // サイドバーのカード更新
     renderStaffList();
 
-    // 固定ヘッダーの進捗率更新
     const targetMetaProg = targetBanner.querySelectorAll(".target-meta")[1];
     if (targetMetaProg) {
-      targetMetaProg.innerHTML = `進捗率: <strong>${prog.percent}%</strong> (${prog.completed}/${prog.total})`;
+      targetMetaProg.innerHTML = `進捗率: <strong>${prog.percent}%</strong> (${prog.completed}/${prog.total} 項目)`;
     }
 
-    // フロアタブの件数更新
     renderFloorTabs();
   }
 
@@ -350,7 +326,6 @@ document.addEventListener("DOMContentLoaded", () => {
     document.getElementById("staff-id").value = staff ? staff.id : `staff_${currentFloor.toLowerCase()}_${Date.now()}`;
     document.getElementById("staff-floor").value = staff ? staff.floor : currentFloor;
     document.getElementById("staff-name").value = staff ? staff.name : "";
-    document.getElementById("staff-role").value = staff ? staff.role : "general";
 
     const deleteBtn = document.getElementById("btn-delete-staff");
     if (deleteBtn) {
@@ -375,21 +350,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const id = document.getElementById("staff-id").value;
     const floor = document.getElementById("staff-floor").value;
     const name = document.getElementById("staff-name").value.trim();
-    const role = document.getElementById("staff-role").value;
 
     if (!name) {
       alert("氏名を入力してください");
       return;
     }
 
-    store.saveStaff({ id, floor, name, role });
+    store.saveStaff({ id, floor, name, role: "general" });
     currentStaffId = id;
     closeStaffModal();
   });
 
   document.getElementById("btn-cancel-staff")?.addEventListener("click", closeStaffModal);
 
-  // アドバイザー編集モーダル
   function openAdvisorModal() {
     advisorForm.reset();
     document.getElementById("adv-2f").value = store.getAdvisorName("2F");
@@ -460,7 +433,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // ----------------------------------------------------
-  // 7. ストア変更通知のハンドリング（他端末更新のリアルタイム反映）
+  // 7. ストア変更通知のハンドリング
   // ----------------------------------------------------
   store.subscribe((event, payload) => {
     if (event === "sync_status_changed") {
@@ -472,7 +445,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // ユーティリティ
   function escapeHtml(str) {
     if (!str) return "";
     return String(str)
@@ -483,9 +455,7 @@ document.addEventListener("DOMContentLoaded", () => {
       .replace(/'/g, "&#039;");
   }
 
-  // ----------------------------------------------------
-  // 初期描画 & クラウドリアルタイム同期開始
-  // ----------------------------------------------------
+  // 初期化
   renderFloorTabs();
   renderStaffList();
   renderEvaluationSheet();
